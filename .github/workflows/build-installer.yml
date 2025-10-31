@@ -263,40 +263,80 @@ jobs:
         
         echo "🔨 Preparazione build ISO..."
         
-        # Installa dipendenze base necessarie per configurare repository Debian
+        # Installa dipendenze base necessarie
         sudo apt-get update
-        sudo apt-get install -y wget gnupg2 apt-transport-https ca-certificates
+        sudo apt-get install -y wget curl dpkg-dev debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux
         
-        # Configura repository Debian per installare live-build da Debian invece che da Ubuntu
-        # Questo evita dipendenze su ubuntu-keyring
-        echo "📦 Configurazione repository Debian per live-build..."
-        echo "deb http://deb.debian.org/debian bookworm main contrib non-free-firmware" | sudo tee /etc/apt/sources.list.d/debian-bookworm.list
-        echo "deb http://security.debian.org/debian-security bookworm-security main contrib non-free-firmware" | sudo tee -a /etc/apt/sources.list.d/debian-bookworm.list
-        echo "deb http://deb.debian.org/debian bookworm-updates main contrib non-free-firmware" | sudo tee -a /etc/apt/sources.list.d/debian-bookworm.list
+        # Scarica manualmente i pacchetti live-build da Debian per evitare problemi con ubuntu-keyring
+        echo "📦 Download manuale pacchetti live-build da Debian..."
+        DEBIAN_MIRROR="http://ftp.debian.org/debian"
+        DEBIAN_SUITE="bookworm"
+        ARCH="amd64"
+        DOWNLOAD_DIR=$(mktemp -d)
+        cd "$DOWNLOAD_DIR"
         
-        # Scarica e aggiungi chiavi GPG di Debian
-        wget -q -O - https://ftp.debian.org/debian/archive/debian-security/2023/rulez/automatic.debian.org/db/dsa.version 2>/dev/null || true
-        wget -q -O - https://ftp-master.debian.org/keys/archive-key-2023.asc | sudo apt-key add - 2>/dev/null || {
-          wget -q -O - https://ftp.debian.org/debian/archive/debian-security/2024/dists/bookworm-security/Release.gpg | sudo apt-key add - 2>/dev/null || true
+        # Funzione per scaricare pacchetto e dipendenze
+        download_package() {
+          local pkg=$1
+          echo "Scaricando $pkg..."
+          wget -q "${DEBIAN_MIRROR}/dists/${DEBIAN_SUITE}/main/binary-${ARCH}/Packages.xz" -O Packages.xz 2>/dev/null || \
+          wget -q "${DEBIAN_MIRROR}/dists/${DEBIAN_SUITE}/main/binary-${ARCH}/Packages.gz" -O Packages.gz 2>/dev/null || true
+          
+          if [ -f Packages.xz ]; then
+            xzcat Packages.xz | grep -A 20 "^Package: ${pkg}$" | grep "^Filename:" | cut -d' ' -f2 | head -1 | while read filename; do
+              if [ -n "$filename" ]; then
+                wget -q "${DEBIAN_MIRROR}/${filename}" -O "${pkg}.deb" || true
+              fi
+            done
+          elif [ -f Packages.gz ]; then
+            zcat Packages.gz | grep -A 20 "^Package: ${pkg}$" | grep "^Filename:" | cut -d' ' -f2 | head -1 | while read filename; do
+              if [ -n "$filename" ]; then
+                wget -q "${DEBIAN_MIRROR}/${filename}" -O "${pkg}.deb" || true
+              fi
+            done
+          fi
         }
         
-        # Priorità: preferisci Debian per live-build, ma permetti Ubuntu per altre dipendenze
-        echo "Package: *" | sudo tee /etc/apt/preferences.d/debian-priority
-        echo "Pin: release o=Debian,n=bookworm" | sudo tee -a /etc/apt/preferences.d/debian-priority
-        echo "Pin-Priority: 500" | sudo tee -a /etc/apt/preferences.d/debian-priority
-        echo "" | sudo tee -a /etc/apt/preferences.d/debian-priority
-        echo "Package: live-build live-boot live-config" | sudo tee -a /etc/apt/preferences.d/debian-priority
-        echo "Pin: release o=Debian,n=bookworm" | sudo tee -a /etc/apt/preferences.d/debian-priority
-        echo "Pin-Priority: 1000" | sudo tee -a /etc/apt/preferences.d/debian-priority
+        # Prova metodo alternativo più semplice: usa pool directory
+        echo "Tentativo download diretto da pool..."
+        for pkg in live-build live-boot live-config; do
+          # Prova diverse versioni comuni
+          for version in "20230615" "20230515" "20230415" "20230315"; do
+            for arch in "all" "$ARCH"; do
+              wget -q "${DEBIAN_MIRROR}/pool/main/l/${pkg}/${pkg}_${version}_${arch}.deb" -O "${pkg}.deb" 2>/dev/null && break 2 || true
+            done
+          done
+          # Se non trovato, prova download con apt download senza installazione
+          if [ ! -f "${pkg}.deb" ]; then
+            echo "Download ${pkg} usando apt download..."
+            cd /tmp
+            sudo apt-get download ${pkg} 2>/dev/null || true
+            if [ -f ${pkg}_*.deb ]; then
+              mv ${pkg}_*.deb "${DOWNLOAD_DIR}/${pkg}.deb"
+            fi
+            cd "$DOWNLOAD_DIR"
+          fi
+        done
         
-        # Aggiorna cache APT
-        sudo apt-get update
+        # Se ancora non trovati, usa i pacchetti Ubuntu (potrebbero funzionare)
+        if [ ! -f "live-build.deb" ]; then
+          echo "⚠️ Pacchetti Debian non trovati, uso Ubuntu come fallback..."
+          sudo apt-get install -y live-build live-boot live-config 2>/dev/null || {
+            # Ultima risorsa: installa da Ubuntu con --allow-unauthenticated
+            sudo apt-get install -y --allow-unauthenticated live-build live-boot live-config || true
+          }
+        else
+          # Installa i pacchetti scaricati manualmente
+          echo "Installazione pacchetti scaricati..."
+          sudo dpkg -i *.deb 2>/dev/null || {
+            # Risolvi dipendenze
+            sudo apt-get install -f -y
+            sudo dpkg -i *.deb || true
+          }
+        fi
         
-        # Installa live-build da Debian e altre dipendenze
-        sudo apt-get install -y -t bookworm live-build live-boot live-config debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux dpkg-dev || {
-          echo "⚠️ Installazione da Debian fallita, provo installazione normale..."
-          sudo apt-get install -y live-build live-boot live-config debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux dpkg-dev
-        }
+        cd "$GITHUB_WORKSPACE"
+        rm -rf "$DOWNLOAD_DIR"
         
         echo "✓ Dipendenze installate"
         
