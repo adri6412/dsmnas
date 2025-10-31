@@ -164,6 +164,29 @@ setup_hooks() {
     
     mkdir -p config/hooks/
     
+    # Hook per applicare preferenze APT ed escludere ubuntu-keyring
+    # Questo hook deve essere il PRIMO (0050) per essere eseguito prima dell'installazione pacchetti
+    cat > config/hooks/0050-exclude-ubuntu-packages.hook.chroot << 'EOF'
+#!/bin/bash
+# Assicura che ubuntu-keyring sia escluso PRIMA dell'installazione pacchetti
+set -e
+
+# Verifica che il file di preferenze sia presente
+if [ ! -f /etc/apt/preferences.d/99-exclude-ubuntu-packages ]; then
+    mkdir -p /etc/apt/preferences.d
+    cat > /etc/apt/preferences.d/99-exclude-ubuntu-packages << 'PREFEOF'
+Package: ubuntu-keyring
+Pin: release *
+Pin-Priority: -1
+PREFEOF
+fi
+
+# Aggiorna cache APT dopo aver impostato le preferenze
+apt-get update || true
+EOF
+
+    chmod +x config/hooks/0050-exclude-ubuntu-packages.hook.chroot
+    
     # Hook per abilitare il servizio
     cat > config/hooks/0100-enable-auto-install.hook.chroot << 'EOF'
 #!/bin/bash
@@ -213,29 +236,6 @@ fi
 EOF
 
     chmod +x config/hooks/0300-prepare-auto-install.hook.chroot
-    
-    # Hook per applicare preferenze APT ed escludere ubuntu-keyring
-    # Questo hook viene eseguito PRIMA dell'installazione dei pacchetti
-    cat > config/hooks/0100-exclude-ubuntu-packages.hook.chroot << 'EOF'
-#!/bin/bash
-# Assicura che ubuntu-keyring sia escluso PRIMA dell'installazione pacchetti
-set -e
-
-# Verifica che il file di preferenze sia presente
-if [ ! -f /etc/apt/preferences.d/99-exclude-ubuntu-packages ]; then
-    mkdir -p /etc/apt/preferences.d
-    cat > /etc/apt/preferences.d/99-exclude-ubuntu-packages << 'PREFEOF'
-Package: ubuntu-keyring
-Pin: release *
-Pin-Priority: -1
-PREFEOF
-fi
-
-# Aggiorna cache APT dopo aver impostato le preferenze
-apt-get update || true
-EOF
-
-    chmod +x config/hooks/0100-exclude-ubuntu-packages.hook.chroot
     
     log "✓ Hooks configurati"
 }
