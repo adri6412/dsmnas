@@ -151,37 +151,38 @@ jobs:
                 exit 1
               }
             }
-          
-          # Cerca makeself.sh - potrebbe essere in diverse posizioni
-          MAKESELF_SCRIPT=""
-          for possible_path in \
-            "$EXTRACT_DIR/makeself-2.5.0/makeself.sh" \
-            "$EXTRACT_DIR/makeself.sh" \
-            "./makeself.sh" \
-            "$(find "$EXTRACT_DIR" -name "makeself.sh" -type f 2>/dev/null | head -1)" \
-            "$(find . -maxdepth 3 -name "makeself.sh" -type f 2>/dev/null | head -1)"; do
-            if [ -n "$possible_path" ] && [ -f "$possible_path" ]; then
-              MAKESELF_SCRIPT="$(cd "$(dirname "$possible_path")" && pwd)/$(basename "$possible_path")"
-              [ -f "$MAKESELF_SCRIPT" ] && break || MAKESELF_SCRIPT=""
+            
+            # Cerca makeself.sh - potrebbe essere in diverse posizioni
+            MAKESELF_SCRIPT=""
+            for possible_path in \
+              "$EXTRACT_DIR/makeself-2.5.0/makeself.sh" \
+              "$EXTRACT_DIR/makeself.sh" \
+              "./makeself.sh" \
+              "$(find "$EXTRACT_DIR" -name "makeself.sh" -type f 2>/dev/null | head -1)" \
+              "$(find . -maxdepth 3 -name "makeself.sh" -type f 2>/dev/null | head -1)"; do
+              if [ -n "$possible_path" ] && [ -f "$possible_path" ]; then
+                MAKESELF_SCRIPT="$(cd "$(dirname "$possible_path")" && pwd)/$(basename "$possible_path")"
+                [ -f "$MAKESELF_SCRIPT" ] && break || MAKESELF_SCRIPT=""
+              fi
+            done
+            
+            if [ -z "$MAKESELF_SCRIPT" ] || [ ! -f "$MAKESELF_SCRIPT" ]; then
+              echo "❌ makeself.sh non trovato dopo l'estrazione"
+              echo "Contenuto directory di estrazione ($EXTRACT_DIR):"
+              ls -la "$EXTRACT_DIR" 2>/dev/null || true
+              echo "Contenuto directory corrente:"
+              ls -la . 2>/dev/null || true
+              echo "Cerca tutti i file .sh:"
+              find "$EXTRACT_DIR" -name "*.sh" -type f 2>/dev/null | head -10 || true
+              find . -maxdepth 3 -name "*.sh" -type f 2>/dev/null | head -10 || true
+              exit 1
             fi
-          done
-          
-          if [ -z "$MAKESELF_SCRIPT" ] || [ ! -f "$MAKESELF_SCRIPT" ]; then
-            echo "❌ makeself.sh non trovato dopo l'estrazione"
-            echo "Contenuto directory di estrazione ($EXTRACT_DIR):"
-            ls -la "$EXTRACT_DIR" 2>/dev/null || true
-            echo "Contenuto directory corrente:"
-            ls -la . 2>/dev/null || true
-            echo "Cerca tutti i file .sh:"
-            find "$EXTRACT_DIR" -name "*.sh" -type f 2>/dev/null | head -10 || true
-            find . -maxdepth 3 -name "*.sh" -type f 2>/dev/null | head -10 || true
-            exit 1
+            
+            chmod +x "$MAKESELF_SCRIPT"
+            MAKESELF_CMD="$MAKESELF_SCRIPT"
+            cd "$GITHUB_WORKSPACE"
+            echo "✓ makeself trovato: $MAKESELF_CMD"
           fi
-          
-          chmod +x "$MAKESELF_SCRIPT"
-          MAKESELF_CMD="$MAKESELF_SCRIPT"
-          cd "$GITHUB_WORKSPACE"
-          echo "✓ makeself trovato: $MAKESELF_CMD"
         fi
         
         # Leggi versione
