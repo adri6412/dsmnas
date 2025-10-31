@@ -26,7 +26,7 @@ on:
 
 jobs:
   build-installer:
-    runs-on: ubuntu-latest
+    runs-on: debian-12  # Usa Debian invece di Ubuntu per evitare conflitti con ubuntu-keyring
     permissions:
       contents: write  # Necessario per creare release e tag
       actions: read    # Necessario per leggere gli artifact
