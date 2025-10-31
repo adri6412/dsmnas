@@ -108,10 +108,17 @@ EOF
     fi
     
     # Configurazione base con opzioni APT per gestire dipendenze opzionali
-    # Configura variabile d'ambiente per debootstrap se keyring non disponibile
+    # Configura variabili d'ambiente per debootstrap non interattivo
+    export DEBIAN_FRONTEND=noninteractive
+    export DEBIAN_PRIORITY=critical
+    export DEBCONF_NONINTERACTIVE_SEEN=true
+    
+    # Opzioni debootstrap
     if [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
         export DEBOOTSTRAP_OPTS="--no-check-gpg"
         log "⚠️ Keyring non trovato, uso --no-check-gpg per debootstrap"
+    else
+        export DEBOOTSTRAP_OPTS=""
     fi
     
     if ! lb config --architectures amd64 \
@@ -190,6 +197,29 @@ setup_hooks() {
     log "Configurazione hooks..."
     
     mkdir -p config/hooks/
+    
+    # Hook bootstrap per configurare APT non-interattivo durante bootstrap
+    cat > config/hooks/0010-noninteractive-bootstrap.hook.bootstrap << 'EOF'
+#!/bin/bash
+# Configura APT per essere non-interattivo durante bootstrap
+set -e
+
+# Crea directory se non esiste
+mkdir -p /etc/apt/apt.conf.d
+
+# Configura APT per non interagire
+echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/90noninteractive
+echo 'APT::Get::Force-Yes "false";' >> /etc/apt/apt.conf.d/90noninteractive
+echo 'APT::Install-Recommends "false";' >> /etc/apt/apt.conf.d/90noninteractive
+echo 'DPkg::Options::="--force-confdef";' >> /etc/apt/apt.conf.d/90noninteractive
+echo 'DPkg::Options::="--force-confold";' >> /etc/apt/apt.conf.d/90noninteractive
+
+# Configura debconf per non interagire
+echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections 2>/dev/null || true
+echo 'debconf debconf/priority select critical' | debconf-set-selections 2>/dev/null || true
+EOF
+
+    chmod +x config/hooks/0010-noninteractive-bootstrap.hook.bootstrap
     
     # Hook per creare pacchetto fittizio ubuntu-keyring PRIMA della risoluzione dipendenze
     # Questo hook viene eseguito durante lb_chroot_archives, prima dell'installazione pacchetti
