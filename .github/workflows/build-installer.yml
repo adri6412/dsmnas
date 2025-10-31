@@ -10,11 +10,18 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'config/**'
+    tags:
+      - 'v*'  # Trigger su tag versioni (es: v1.0.0)
   pull_request:
     branches:
       - main
       - master
   workflow_dispatch:  # Permette esecuzione manuale
+    inputs:
+      version:
+        description: 'Version number (es: 1.0.0). Se vuoto, usa automatico.'
+        required: false
+        type: string
 
 jobs:
   build-installer:
@@ -23,16 +30,70 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history per tag/version detection
+        
+    - name: Determine version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+          # Versione manuale da input
+          VERSION="${{ inputs.version }}"
+        elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          # Versione da tag (rimuovi 'v' prefix)
+          VERSION="${GITHUB_REF#refs/tags/v}"
+        elif [ -f VERSION ]; then
+          # Leggi da file VERSION
+          VERSION=$(cat VERSION)
+          # Incrementa patch version per ogni build
+          COMMITS=$(git rev-list --count HEAD)
+          BASE_VERSION=$(echo $VERSION | cut -d. -f1-2)
+          PATCH=$(echo $VERSION | cut -d. -f3)
+          VERSION="${BASE_VERSION}.$((PATCH + COMMITS))"
+        else
+          # Versione automatica basata su commit count
+          COMMITS=$(git rev-list --count HEAD)
+          VERSION="0.0.${COMMITS}"
+        fi
+        
+        # Rimuovi eventuali caratteri non validi
+        VERSION=$(echo "$VERSION" | sed 's/[^0-9.]//g')
+        
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "📦 Versione determinata: $VERSION"
+        
+    - name: Update version files
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        
+        # Aggiorna file VERSION
+        echo "$VERSION" > VERSION
+        
+        # Aggiorna backend/main.py
+        sed -i "s/version=\"[^\"]*\"/version=\"$VERSION\"/" backend/main.py
+        
+        # Aggiorna frontend/package.json
+        sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" frontend/package.json
+        
+        echo "✅ Versioni aggiornate a $VERSION"
+        cat VERSION
       
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y makeself
+        sudo apt-get install -y makeself || echo "makeself non disponibile nel repo, verrà scaricato"
         
-    - name: Verify makeself installation
+    - name: Check makeself availability
+      id: check_makeself
       run: |
-        which makeself.sh || which ./makeself.sh
-        makeself.sh --version || echo "Makeself installato"
+        if command -v makeself.sh &> /dev/null 2>&1; then
+          echo "available=true" >> $GITHUB_OUTPUT
+          echo "✓ makeself.sh trovato in PATH"
+          makeself.sh --version 2>/dev/null || true
+        else
+          echo "available=false" >> $GITHUB_OUTPUT
+          echo "⚠ makeself.sh non in PATH, verrà scaricato"
+        fi
         
     - name: Build installer_dsm.sh
       run: |
@@ -43,33 +104,52 @@ jobs:
         cd "$GITHUB_WORKSPACE"
         
         # Installa o usa makeself
-        if command -v makeself.sh &> /dev/null; then
+        if [ "${{ steps.check_makeself.outputs.available }}" = "true" ] && command -v makeself.sh &> /dev/null 2>&1; then
           MAKESELF_CMD="makeself.sh"
+          echo "✓ Usando makeself.sh dal sistema"
         else
           # Fallback: scarica makeself
-          echo "Scaricamento makeself 2.5.0..."
-          wget -q https://github.com/megastep/makeself/releases/download/release-2.5.0/makeself-2.5.0.run
+          echo "📥 Scaricamento makeself 2.5.0..."
+          wget -q https://github.com/megastep/makeself/releases/download/release-2.5.0/makeself-2.5.0.run || {
+            echo "❌ Errore nel download di makeself"
+            exit 1
+          }
           chmod +x makeself-2.5.0.run
           # Estrai in directory temporanea
           mkdir -p /tmp/makeself
           cd /tmp/makeself
-          bash "$GITHUB_WORKSPACE/makeself-2.5.0.run" --target /tmp/makeself --nox11 --quiet
+          bash "$GITHUB_WORKSPACE/makeself-2.5.0.run" --target /tmp/makeself --nox11 --quiet || {
+            echo "❌ Errore nell'estrazione di makeself"
+            exit 1
+          }
+          if [ ! -f "/tmp/makeself/makeself-2.5.0/makeself.sh" ]; then
+            echo "❌ makeself.sh non trovato dopo l'estrazione"
+            exit 1
+          fi
           MAKESELF_CMD="/tmp/makeself/makeself-2.5.0/makeself.sh"
           cd "$GITHUB_WORKSPACE"
+          echo "✓ makeself scaricato e pronto"
         fi
+        
+        # Leggi versione
+        VERSION="${{ steps.version.outputs.version }}"
+        INSTALLER_NAME="installer_dsm_v${VERSION}.sh"
         
         # Esegui makeself come nel tuo comando:
         # ./makeself.sh ../nas/ installer_dsm.sh VirtualDSM ./scripts/install.sh
         # Ma in GitHub Actions, il repo è già nella root, quindi usiamo ./
-        echo "Esecuzione makeself..."
-        $MAKESELF_CMD ./ installer_dsm.sh "VirtualDSM" ./scripts/install.sh
+        echo "Esecuzione makeself per versione $VERSION..."
+        $MAKESELF_CMD ./ "$INSTALLER_NAME" "VirtualDSM v${VERSION}" ./scripts/install.sh
         
         # Sposta il file risultante in scripts/
-        if [ -f "installer_dsm.sh" ]; then
-          mv installer_dsm.sh scripts/
-          echo "✓ installer_dsm.sh creato in scripts/"
+        if [ -f "$INSTALLER_NAME" ]; then
+          mv "$INSTALLER_NAME" scripts/
+          # Crea anche un symlink/alias senza versione per compatibilità
+          cp "scripts/$INSTALLER_NAME" "scripts/installer_dsm.sh"
+          echo "✓ $INSTALLER_NAME creato in scripts/"
+          echo "✓ installer_dsm.sh (alias) creato in scripts/"
         else
-          echo "✗ ERRORE: installer_dsm.sh non creato!"
+          echo "✗ ERRORE: $INSTALLER_NAME non creato!"
           exit 1
         fi
         
@@ -98,13 +178,50 @@ jobs:
     - name: Upload installer as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: installer-dsm
-        path: scripts/installer_dsm.sh
-        retention-days: 30
+        name: installer-dsm-v${{ steps.version.outputs.version }}
+        path: |
+          scripts/installer_dsm_v${{ steps.version.outputs.version }}.sh
+          scripts/installer_dsm.sh
+        retention-days: 90
         
-    - name: Create Release (optional)
-      if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          scripts/installer_dsm_v${{ steps.version.outputs.version }}.sh
+        name: Release v${{ steps.version.outputs.version }}
+        body: |
+          ## VirtualDSM Installer v${{ steps.version.outputs.version }}
+          
+          ### Download
+          - **installer_dsm_v${{ steps.version.outputs.version }}.sh** - Installer completo
+          
+          ### Installazione
+          ```bash
+          chmod +x installer_dsm_v${{ steps.version.outputs.version }}.sh
+          sudo ./installer_dsm_v${{ steps.version.outputs.version }}.sh
+          ```
+          
+          ### Build Info
+          - **Versione:** ${{ steps.version.outputs.version }}
+          - **Commit:** ${{ github.sha }}
+          - **Data:** ${{ github.event.head_commit.timestamp }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Summary
       run: |
-        echo "Installer creato e pronto per il release"
-        echo "Scarica l'artifact 'installer-dsm' per ottenere installer_dsm.sh"
+        VERSION="${{ steps.version.outputs.version }}"
+        echo "## 📦 Installer Build Completato" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Versione:** \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**File creati:**" >> $GITHUB_STEP_SUMMARY
+        echo "- \`installer_dsm_v${VERSION}.sh\`" >> $GITHUB_STEP_SUMMARY
+        echo "- \`installer_dsm.sh\` (alias)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📥 Scarica l'artifact \`installer-dsm-v${VERSION}\` per ottenere i file." >> $GITHUB_STEP_SUMMARY
 
