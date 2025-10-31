@@ -189,6 +189,21 @@ jobs:
         VERSION="${{ steps.version.outputs.version }}"
         INSTALLER_NAME="installer_dsm_v${VERSION}.sh"
         
+        # Assicurati che tutti gli script siano eseguibili prima di creare l'archivio
+        echo "Impostazione permessi di esecuzione per gli script..."
+        find scripts/ -type f -name "*.sh" -exec chmod +x {} \;
+        find backend/scripts/ -type f -name "*.py" -exec chmod +x {} \; 2>/dev/null || true
+        chmod +x scripts/install.sh || true
+        
+        # Verifica che install.sh sia eseguibile
+        if [ ! -x "scripts/install.sh" ]; then
+          echo "❌ ERRORE: scripts/install.sh non è eseguibile!"
+          ls -la scripts/install.sh
+          chmod +x scripts/install.sh
+        fi
+        
+        echo "✓ Permessi impostati"
+        
         # Esegui makeself come nel tuo comando:
         # ./makeself.sh ../nas/ installer_dsm.sh VirtualDSM ./scripts/install.sh
         # Ma in GitHub Actions, il repo è già nella root, quindi usiamo ./
