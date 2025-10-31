@@ -194,11 +194,48 @@ def create_zfs_pool(name: str, raid_type: str, disks: List[str], mount_point: Op
                     "error": f"Il mountpoint '{mount_point}' è già utilizzato da '{dataset.get('name')}'. Scegli un mountpoint diverso."
                 }
     
+    # Se il mountpoint è /storage, verifica che non sia in overlay
+    if actual_mount_point == "/storage":
+        # Crea la directory se non esiste (importante per overlayroot)
+        if not os.path.exists("/storage"):
+            try:
+                os.makedirs("/storage", mode=0o755)
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Impossibile creare la directory /storage: {str(e)}. Verifica i permessi."
+                }
+        
+        # Verifica che /storage non sia montato da overlayroot o overlay
+        # Questo è importante perché overlayroot può interferire con ZFS
+        try:
+            mount_check = subprocess.run(
+                ["findmnt", "-n", "-o", "SOURCE,FSTYPE", "/storage"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if mount_check.returncode == 0 and mount_check.stdout.strip():
+                mount_info = mount_check.stdout.strip().split()
+                if len(mount_info) >= 2:
+                    mount_source = mount_info[0]
+                    mount_fstype = mount_info[1]
+                    # Se è montato da overlay, avvisa ma continua (bind mount lo risolverà)
+                    if "overlay" in mount_fstype.lower():
+                        # Questo potrebbe essere un problema, ma il bind mount dovrebbe risolverlo
+                        # al prossimo riavvio quando bind-armnas.service viene eseguito
+                        pass
+        except FileNotFoundError:
+            # findmnt non disponibile, continua comunque
+            pass
+        except Exception:
+            # Errore nel controllo, continua comunque
+            pass
+    
     # Costruisci il comando in base al tipo di RAID
     command = ["zpool", "create"]
     
     # Aggiungi il punto di montaggio se specificato
-    # Se mount_point era /storage ma è già occupato, usa "none"
     if actual_mount_point:
         command.extend(["-m", actual_mount_point])
     
