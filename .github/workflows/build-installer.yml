@@ -263,42 +263,44 @@ jobs:
         
         echo "🔨 Preparazione build ISO..."
         
-        # Installa dipendenze per live-build
+        # Installa dipendenze base necessarie per configurare repository Debian
         sudo apt-get update
-        sudo apt-get install -y live-build live-boot live-config debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux dpkg-dev
+        sudo apt-get install -y wget gnupg2 apt-transport-https ca-certificates
         
-        # Crea pacchetto fittizio ubuntu-keyring per evitare errori durante live-build
-        # Questo è necessario perché live-build su Ubuntu può richiedere ubuntu-keyring
-        # che non esiste nei repository Debian durante la costruzione dell'immagine
-        echo "🔧 Creazione pacchetto fittizio ubuntu-keyring..."
-        TMPDIR=$(mktemp -d)
-        cd "$TMPDIR"
+        # Configura repository Debian per installare live-build da Debian invece che da Ubuntu
+        # Questo evita dipendenze su ubuntu-keyring
+        echo "📦 Configurazione repository Debian per live-build..."
+        echo "deb http://deb.debian.org/debian bookworm main contrib non-free-firmware" | sudo tee /etc/apt/sources.list.d/debian-bookworm.list
+        echo "deb http://security.debian.org/debian-security bookworm-security main contrib non-free-firmware" | sudo tee -a /etc/apt/sources.list.d/debian-bookworm.list
+        echo "deb http://deb.debian.org/debian bookworm-updates main contrib non-free-firmware" | sudo tee -a /etc/apt/sources.list.d/debian-bookworm.list
         
-        mkdir -p ubuntu-keyring/DEBIAN
-        echo "Package: ubuntu-keyring" > ubuntu-keyring/DEBIAN/control
-        echo "Version: 2012.05.19-1" >> ubuntu-keyring/DEBIAN/control
-        echo "Architecture: all" >> ubuntu-keyring/DEBIAN/control
-        echo "Maintainer: ArmNAS Dummy Package <noreply@armnas.local>" >> ubuntu-keyring/DEBIAN/control
-        echo "Description: Dummy ubuntu-keyring package for Debian builds" >> ubuntu-keyring/DEBIAN/control
-        echo " This is a dummy package to satisfy dependencies requiring ubuntu-keyring" >> ubuntu-keyring/DEBIAN/control
-        echo " when building Debian images on Ubuntu runners." >> ubuntu-keyring/DEBIAN/control
-        echo "Priority: optional" >> ubuntu-keyring/DEBIAN/control
-        echo "Section: misc" >> ubuntu-keyring/DEBIAN/control
-        
-        mkdir -p ubuntu-keyring/usr/share/doc/ubuntu-keyring
-        touch ubuntu-keyring/usr/share/doc/ubuntu-keyring/copyright
-        
-        dpkg-deb --build ubuntu-keyring 2>/dev/null || {
-          echo "Errore nella creazione del pacchetto fittizio, continuo comunque"
+        # Scarica e aggiungi chiavi GPG di Debian
+        wget -q -O - https://ftp.debian.org/debian/archive/debian-security/2023/rulez/automatic.debian.org/db/dsa.version 2>/dev/null || true
+        wget -q -O - https://ftp-master.debian.org/keys/archive-key-2023.asc | sudo apt-key add - 2>/dev/null || {
+          wget -q -O - https://ftp.debian.org/debian/archive/debian-security/2024/dists/bookworm-security/Release.gpg | sudo apt-key add - 2>/dev/null || true
         }
         
-        if [ -f ubuntu-keyring*.deb ]; then
-          sudo dpkg -i ubuntu-keyring*.deb 2>/dev/null || sudo dpkg --force-depends -i ubuntu-keyring*.deb 2>/dev/null || true
-          echo "Pacchetto fittizio ubuntu-keyring installato"
-        fi
+        # Priorità: preferisci Debian per live-build, ma permetti Ubuntu per altre dipendenze
+        sudo tee /etc/apt/preferences.d/debian-priority << 'EOF'
+Package: *
+Pin: release o=Debian,n=bookworm
+Pin-Priority: 500
+
+Package: live-build live-boot live-config
+Pin: release o=Debian,n=bookworm
+Pin-Priority: 1000
+EOF
         
-        cd "$GITHUB_WORKSPACE"
-        rm -rf "$TMPDIR"
+        # Aggiorna cache APT
+        sudo apt-get update
+        
+        # Installa live-build da Debian e altre dipendenze
+        sudo apt-get install -y -t bookworm live-build live-boot live-config debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux dpkg-dev || {
+          echo "⚠️ Installazione da Debian fallita, provo installazione normale..."
+          sudo apt-get install -y live-build live-boot live-config debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux dpkg-dev
+        }
+        
+        echo "✓ Dipendenze installate"
         
         # Assicurati che installer_dsm.sh sia nella posizione corretta per build.sh
         # build.sh si aspetta ../scripts/installer_dsm.sh (rispetto a live-build/)
