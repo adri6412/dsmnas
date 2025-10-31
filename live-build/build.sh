@@ -201,6 +201,30 @@ EOF
 
     chmod +x config/hooks/0300-prepare-auto-install.hook.chroot
     
+    # Hook per escludere pacchetti Ubuntu-specific durante l'installazione
+    cat > config/hooks/0250-exclude-ubuntu-packages.hook.chroot << 'EOF'
+#!/bin/bash
+# Escludi pacchetti Ubuntu-specific che non esistono in Debian
+set -e
+
+# Crea un file di preferenze APT per escludere ubuntu-keyring
+mkdir -p /etc/apt/preferences.d
+cat > /etc/apt/preferences.d/99-exclude-ubuntu-packages << 'PREFEOF'
+Package: ubuntu-keyring
+Pin: release *
+Pin-Priority: -1
+PREFEOF
+
+# Pulisci eventuali riferimenti a ubuntu-keyring nelle dipendenze
+# Questo evita errori durante apt install
+echo "Package: ubuntu-keyring" >> /etc/apt/preferences.d/99-exclude-ubuntu-packages
+
+# Aggiorna cache APT
+apt-get update || true
+EOF
+
+    chmod +x config/hooks/0250-exclude-ubuntu-packages.hook.chroot
+    
     log "✓ Hooks configurati"
 }
 
@@ -246,6 +270,13 @@ EOF
 # Firmware per storage e network
 firmware-linux-nonfree
 firmware-linux-free
+EOF
+
+    # Escludi pacchetti Ubuntu-specific che non esistono in Debian
+    # In live-build, i file .excludes.chroot escludono pacchetti
+    cat > config/package-lists/ubuntu-excludes.excludes.chroot << 'EOF'
+# Escludi pacchetti Ubuntu-specific non disponibili in Debian
+ubuntu-keyring
 EOF
 
     log "✓ Pacchetti configurati"
