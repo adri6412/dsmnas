@@ -275,18 +275,26 @@ jobs:
         cd "$TMPDIR"
         
         mkdir -p ubuntu-keyring/DEBIAN
-        printf "Package: ubuntu-keyring\nVersion: 2012.05.19-1\nArchitecture: all\nMaintainer: ArmNAS Dummy Package <noreply@armnas.local>\nDescription: Dummy ubuntu-keyring package for Debian builds\n This is a dummy package to satisfy dependencies requiring ubuntu-keyring\n when building Debian images on Ubuntu runners.\nPriority: optional\nSection: misc\n" > ubuntu-keyring/DEBIAN/control
+        echo "Package: ubuntu-keyring" > ubuntu-keyring/DEBIAN/control
+        echo "Version: 2012.05.19-1" >> ubuntu-keyring/DEBIAN/control
+        echo "Architecture: all" >> ubuntu-keyring/DEBIAN/control
+        echo "Maintainer: ArmNAS Dummy Package <noreply@armnas.local>" >> ubuntu-keyring/DEBIAN/control
+        echo "Description: Dummy ubuntu-keyring package for Debian builds" >> ubuntu-keyring/DEBIAN/control
+        echo " This is a dummy package to satisfy dependencies requiring ubuntu-keyring" >> ubuntu-keyring/DEBIAN/control
+        echo " when building Debian images on Ubuntu runners." >> ubuntu-keyring/DEBIAN/control
+        echo "Priority: optional" >> ubuntu-keyring/DEBIAN/control
+        echo "Section: misc" >> ubuntu-keyring/DEBIAN/control
         
         mkdir -p ubuntu-keyring/usr/share/doc/ubuntu-keyring
         touch ubuntu-keyring/usr/share/doc/ubuntu-keyring/copyright
         
         dpkg-deb --build ubuntu-keyring 2>/dev/null || {
-          echo "⚠️ Errore nella creazione del pacchetto fittizio, continuo comunque"
+          echo "Errore nella creazione del pacchetto fittizio, continuo comunque"
         }
         
         if [ -f ubuntu-keyring*.deb ]; then
           sudo dpkg -i ubuntu-keyring*.deb 2>/dev/null || sudo dpkg --force-depends -i ubuntu-keyring*.deb 2>/dev/null || true
-          echo "✓ Pacchetto fittizio ubuntu-keyring installato"
+          echo "Pacchetto fittizio ubuntu-keyring installato"
         fi
         
         cd "$GITHUB_WORKSPACE"
