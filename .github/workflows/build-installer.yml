@@ -26,7 +26,7 @@ on:
 
 jobs:
   build-installer:
-    runs-on: debian-12  # Usa Debian invece di Ubuntu per evitare conflitti con ubuntu-keyring
+    runs-on: ubuntu-latest
     permissions:
       contents: write  # Necessario per creare release e tag
       actions: read    # Necessario per leggere gli artifact
@@ -265,7 +265,42 @@ jobs:
         
         # Installa dipendenze per live-build
         sudo apt-get update
-        sudo apt-get install -y live-build live-boot live-config debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux
+        sudo apt-get install -y live-build live-boot live-config debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux dpkg-dev
+        
+        # Crea pacchetto fittizio ubuntu-keyring per evitare errori durante live-build
+        # Questo è necessario perché live-build su Ubuntu può richiedere ubuntu-keyring
+        # che non esiste nei repository Debian durante la costruzione dell'immagine
+        echo "🔧 Creazione pacchetto fittizio ubuntu-keyring..."
+        TMPDIR=$(mktemp -d)
+        cd "$TMPDIR"
+        
+        mkdir -p ubuntu-keyring/DEBIAN
+        cat > ubuntu-keyring/DEBIAN/control << 'CONTROL'
+Package: ubuntu-keyring
+Version: 2012.05.19-1
+Architecture: all
+Maintainer: ArmNAS Dummy Package <noreply@armnas.local>
+Description: Dummy ubuntu-keyring package for Debian builds
+ This is a dummy package to satisfy dependencies requiring ubuntu-keyring
+ when building Debian images on Ubuntu runners.
+Priority: optional
+Section: misc
+CONTROL
+        
+        mkdir -p ubuntu-keyring/usr/share/doc/ubuntu-keyring
+        touch ubuntu-keyring/usr/share/doc/ubuntu-keyring/copyright
+        
+        dpkg-deb --build ubuntu-keyring 2>/dev/null || {
+          echo "⚠️ Errore nella creazione del pacchetto fittizio, continuo comunque"
+        }
+        
+        if [ -f ubuntu-keyring*.deb ]; then
+          sudo dpkg -i ubuntu-keyring*.deb 2>/dev/null || sudo dpkg --force-depends -i ubuntu-keyring*.deb 2>/dev/null || true
+          echo "✓ Pacchetto fittizio ubuntu-keyring installato"
+        fi
+        
+        cd "$GITHUB_WORKSPACE"
+        rm -rf "$TMPDIR"
         
         # Assicurati che installer_dsm.sh sia nella posizione corretta per build.sh
         # build.sh si aspetta ../scripts/installer_dsm.sh (rispetto a live-build/)

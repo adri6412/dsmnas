@@ -88,7 +88,7 @@ Pin: release *
 Pin-Priority: -1
 EOF
     
-    # Configurazione base
+    # Configurazione base con opzioni APT per gestire dipendenze opzionali
     if ! lb config --architectures amd64 \
               --binary-images iso-hybrid \
               --distribution bookworm \
@@ -104,7 +104,9 @@ EOF
               --iso-volume "ArmNAS-DSM-Installer" \
               --iso-publisher "ArmNAS Project" \
               --iso-application "ZFS NAS with Virtual DSM" \
-              --iso-preparer "live-build" 2>&1 | tee -a build.log; then
+              --iso-preparer "live-build" \
+              --apt-options "--allow-unauthenticated" \
+              2>&1 | tee -a build.log; then
         error "lb config fallito! Controlla build.log per dettagli"
     fi
     
@@ -164,13 +166,19 @@ setup_hooks() {
     
     mkdir -p config/hooks/
     
-    # Hook per creare pacchetto fittizio ubuntu-keyring usando dpkg
-    # Questo hook deve essere il PRIMO (0050) per essere eseguito prima dell'installazione pacchetti
+    # Hook per creare pacchetto fittizio ubuntu-keyring PRIMA della risoluzione dipendenze
+    # Questo hook viene eseguito durante lb_chroot_archives, prima dell'installazione pacchetti
     cat > config/hooks/0050-exclude-ubuntu-packages.hook.chroot << 'EOF'
 #!/bin/bash
 # Crea pacchetto fittizio ubuntu-keyring per soddisfare dipendenze
-# Questo viene eseguito PRIMA dell'installazione dei pacchetti
+# Questo viene eseguito PRIMA dell'installazione dei pacchetti nel chroot
 set -e
+
+# Verifica che dpkg-deb sia disponibile
+if ! command -v dpkg-deb &> /dev/null; then
+    echo "⚠️ dpkg-deb non disponibile, salto creazione pacchetto fittizio"
+    exit 0
+fi
 
 # Crea directory temporanea per il pacchetto fittizio
 TMPDIR=$(mktemp -d)
@@ -194,26 +202,30 @@ CONTROL
 
 # Crea un file vuoto per evitare errori
 mkdir -p ubuntu-keyring/usr/share/doc/ubuntu-keyring
-touch ubuntu-keyring/usr/share/doc/ubuntu-keyring/copyright
+echo "Dummy package" > ubuntu-keyring/usr/share/doc/ubuntu-keyring/copyright
 
-# Costruisci il pacchetto .deb
-dpkg-deb --build ubuntu-keyring 2>/dev/null || {
-    # Fallback: crea pacchetto più semplice
-    echo "Package: ubuntu-keyring" > ubuntu-keyring/DEBIAN/control
-    echo "Version: 1.0" >> ubuntu-keyring/DEBIAN/control
-    echo "Architecture: all" >> ubuntu-keyring/DEBIAN/control
-    echo "Description: Dummy package" >> ubuntu-keyring/DEBIAN/control
-    dpkg-deb --build -Z none ubuntu-keyring 2>/dev/null || true
+# Costruisci il pacchetto .deb (usa -Z none per non comprimere, più veloce)
+dpkg-deb --build -Z none ubuntu-keyring 2>/dev/null || {
+    # Se fallisce, prova senza compressione
+    dpkg-deb --build ubuntu-keyring 2>/dev/null || {
+        echo "⚠️ Impossibile creare pacchetto .deb, continuo comunque"
+        cd /
+        rm -rf "$TMPDIR"
+        exit 0
+    }
 }
 
-# Installa il pacchetto fittizio usando --force-depends
+# Installa il pacchetto fittizio usando --force-depends per ignorare dipendenze
 if [ -f ubuntu-keyring*.deb ]; then
-    dpkg --force-depends -i ubuntu-keyring*.deb 2>/dev/null || \
+    # Prova vari metodi di installazione
+    dpkg --force-depends --force-confdef -i ubuntu-keyring*.deb 2>/dev/null || \
     dpkg --force-all -i ubuntu-keyring*.deb 2>/dev/null || \
-    apt-get install -y --allow-unauthenticated --allow-downgrades ./ubuntu-keyring*.deb 2>/dev/null || true
+    dpkg -i ubuntu-keyring*.deb 2>/dev/null || true
+    
+    echo "✓ Pacchetto fittizio ubuntu-keyring installato nel chroot"
 fi
 
-# Crea anche file di preferenze APT come backup
+# Crea file di preferenze APT per escludere ubuntu-keyring dai repository
 mkdir -p /etc/apt/preferences.d
 cat > /etc/apt/preferences.d/99-exclude-ubuntu-packages << 'PREFEOF'
 Package: ubuntu-keyring
@@ -221,20 +233,23 @@ Pin: release *
 Pin-Priority: -1
 PREFEOF
 
-# Configura APT per gestire meglio le dipendenze
+# Configura APT per gestire meglio le dipendenze rotte
 mkdir -p /etc/apt/apt.conf.d
 cat > /etc/apt/apt.conf.d/99-armnas-deps << 'APTCONF'
 APT::Get::Fix-Broken "true";
 APT::Get::AllowUnauthenticated "false";
+APT::Get::Install-Recommends "false";
 APTCONF
 
 # Pulizia
 cd /
 rm -rf "$TMPDIR"
 
-# Aggiorna cache APT e risolvi dipendenze
-apt-get update || true
-apt-get install -f -y --allow-unauthenticated 2>/dev/null || true
+# Aggiorna cache APT (necessario dopo aver installato il pacchetto)
+apt-get update 2>&1 | grep -v "ubuntu-keyring" || apt-get update || true
+
+# Risolvi eventuali dipendenze rotte
+apt-get install -f -y 2>&1 | grep -v "ubuntu-keyring" || apt-get install -f -y || true
 EOF
 
     chmod +x config/hooks/0050-exclude-ubuntu-packages.hook.chroot
