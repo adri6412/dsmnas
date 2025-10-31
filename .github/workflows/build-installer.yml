@@ -108,27 +108,80 @@ jobs:
           MAKESELF_CMD="makeself.sh"
           echo "✓ Usando makeself.sh dal sistema"
         else
-          # Fallback: scarica makeself
-          echo "📥 Scaricamento makeself 2.5.0..."
-          wget -q https://github.com/megastep/makeself/releases/download/release-2.5.0/makeself-2.5.0.run || {
-            echo "❌ Errore nel download di makeself"
-            exit 1
-          }
-          chmod +x makeself-2.5.0.run
-          # Estrai in directory temporanea
-          mkdir -p /tmp/makeself
-          cd /tmp/makeself
-          bash "$GITHUB_WORKSPACE/makeself-2.5.0.run" --target /tmp/makeself --nox11 --quiet || {
-            echo "❌ Errore nell'estrazione di makeself"
-            exit 1
-          }
-          if [ ! -f "/tmp/makeself/makeself-2.5.0/makeself.sh" ]; then
+          # Fallback: scarica makeself via git (più affidabile del .run)
+          echo "📥 Scaricamento makeself dal repository GitHub..."
+          cd /tmp
+          rm -rf makeself-repo 2>/dev/null || true
+          
+          # Prova a clonare il repository makeself
+          if command -v git &> /dev/null 2>&1; then
+            git clone --depth 1 https://github.com/megastep/makeself.git makeself-repo 2>&1 || {
+              echo "⚠ Clone git fallito, provo con file .run..."
+            }
+            
+            if [ -f "/tmp/makeself-repo/makeself.sh" ]; then
+              MAKESELF_CMD="/tmp/makeself-repo/makeself.sh"
+              chmod +x "$MAKESELF_CMD"
+              cd "$GITHUB_WORKSPACE"
+              echo "✓ makeself trovato via git: $MAKESELF_CMD"
+            fi
+          fi
+          
+          # Se git non ha funzionato, usa il file .run
+          if [ -z "$MAKESELF_CMD" ] || [ ! -f "$MAKESELF_CMD" ]; then
+            echo "📥 Scaricamento makeself 2.5.0.run..."
+            cd "$GITHUB_WORKSPACE"
+            wget -q https://github.com/megastep/makeself/releases/download/release-2.5.0/makeself-2.5.0.run || {
+              echo "❌ Errore nel download di makeself"
+              exit 1
+            }
+            chmod +x makeself-2.5.0.run
+            
+            # Estrai makeself in directory temporanea
+            EXTRACT_DIR="/tmp/makeself-extract"
+            rm -rf "$EXTRACT_DIR" 2>/dev/null || true
+            mkdir -p "$EXTRACT_DIR"
+            cd "$EXTRACT_DIR"
+            
+            # Estrai il file (senza --target per estrarre nella directory corrente)
+            bash "$GITHUB_WORKSPACE/makeself-2.5.0.run" --nox11 --quiet 2>&1 || {
+              echo "⚠ Estrazione senza target fallita, provo con --target..."
+              bash "$GITHUB_WORKSPACE/makeself-2.5.0.run" --nox11 --quiet --target "$EXTRACT_DIR" 2>&1 || {
+                echo "❌ Errore nell'estrazione di makeself"
+                exit 1
+              }
+            }
+          
+          # Cerca makeself.sh - potrebbe essere in diverse posizioni
+          MAKESELF_SCRIPT=""
+          for possible_path in \
+            "$EXTRACT_DIR/makeself-2.5.0/makeself.sh" \
+            "$EXTRACT_DIR/makeself.sh" \
+            "./makeself.sh" \
+            "$(find "$EXTRACT_DIR" -name "makeself.sh" -type f 2>/dev/null | head -1)" \
+            "$(find . -maxdepth 3 -name "makeself.sh" -type f 2>/dev/null | head -1)"; do
+            if [ -n "$possible_path" ] && [ -f "$possible_path" ]; then
+              MAKESELF_SCRIPT="$(cd "$(dirname "$possible_path")" && pwd)/$(basename "$possible_path")"
+              [ -f "$MAKESELF_SCRIPT" ] && break || MAKESELF_SCRIPT=""
+            fi
+          done
+          
+          if [ -z "$MAKESELF_SCRIPT" ] || [ ! -f "$MAKESELF_SCRIPT" ]; then
             echo "❌ makeself.sh non trovato dopo l'estrazione"
+            echo "Contenuto directory di estrazione ($EXTRACT_DIR):"
+            ls -la "$EXTRACT_DIR" 2>/dev/null || true
+            echo "Contenuto directory corrente:"
+            ls -la . 2>/dev/null || true
+            echo "Cerca tutti i file .sh:"
+            find "$EXTRACT_DIR" -name "*.sh" -type f 2>/dev/null | head -10 || true
+            find . -maxdepth 3 -name "*.sh" -type f 2>/dev/null | head -10 || true
             exit 1
           fi
-          MAKESELF_CMD="/tmp/makeself/makeself-2.5.0/makeself.sh"
+          
+          chmod +x "$MAKESELF_SCRIPT"
+          MAKESELF_CMD="$MAKESELF_SCRIPT"
           cd "$GITHUB_WORKSPACE"
-          echo "✓ makeself scaricato e pronto"
+          echo "✓ makeself trovato: $MAKESELF_CMD"
         fi
         
         # Leggi versione
