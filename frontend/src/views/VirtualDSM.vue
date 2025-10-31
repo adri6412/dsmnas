@@ -363,6 +363,12 @@
                 <strong>Nota importante:</strong>
                 Virtual DSM è destinato all'uso su hardware Synology. Assicurati di rispettare i termini di licenza di Synology quando utilizzi questo software.
               </div>
+              
+              <div class="alert alert-info mt-3">
+                <font-awesome-icon icon="info-circle" class="me-2" />
+                <strong>Attribuzione:</strong>
+                Questo progetto utilizza <a href="https://github.com/vdsm/virtual-dsm" target="_blank" rel="noopener noreferrer">Virtual DSM</a> sviluppato da <a href="https://github.com/vdsm/virtual-dsm" target="_blank" rel="noopener noreferrer">vdsm/virtual-dsm</a>. Licenza MIT.
+              </div>
             </div>
           </div>
         </div>
@@ -385,6 +391,13 @@
         <pre class="container-logs">{{ containerLogs }}</pre>
       </div>
     </b-modal>
+    
+    <!-- Footer con attribuzione -->
+    <div class="mt-4 text-center text-muted small">
+      <p class="mb-0">
+        Virtual DSM basato su <a href="https://github.com/vdsm/virtual-dsm" target="_blank" rel="noopener noreferrer">vdsm/virtual-dsm</a>
+      </p>
+    </div>
   </div>
 </template>
 

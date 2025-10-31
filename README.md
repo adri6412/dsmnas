@@ -89,6 +89,8 @@ L'installazione configura automaticamente:
 - Gestione spazio disco
 - Configurazione Serial Number e MAC Address
 
+**Nota**: Questo progetto utilizza [Virtual DSM](https://github.com/vdsm/virtual-dsm), un progetto open-source che permette di eseguire Synology DSM in un container Docker. Virtual DSM è sviluppato e mantenuto da [vdsm/virtual-dsm](https://github.com/vdsm/virtual-dsm).
+
 ### Autenticazione
 - Sistema di autenticazione con Argon2 (senza limite password)
 - Gestione utenti amministratori
@@ -146,6 +148,16 @@ Consulta la documentazione completa in `docs/`:
 - Cookie di sessione sicuri
 - Protezione endpoint API
 - OverlayFS per ridurre scritture su SD
+
+## 🙏 Attribuzioni
+
+Questo progetto utilizza le seguenti tecnologie e progetti open-source:
+
+- **[Virtual DSM](https://github.com/vdsm/virtual-dsm)** - Virtual DSM in a Docker container. Sviluppato e mantenuto da [vdsm/virtual-dsm](https://github.com/vdsm/virtual-dsm). Licenza MIT.
+
+## ⚖️ Disclaimer
+
+**Virtual DSM Disclaimer**: Solo eseguire il container Virtual DSM su hardware Synology ufficiale, qualsiasi altro uso non è consentito dalla EULA di Synology. I nomi di prodotto, loghi, marchi e altri marchi commerciali menzionati in questo progetto sono proprietà dei rispettivi titolari di marchio. Questo progetto non è affiliato, sponsorizzato o approvato da Synology, Inc.
 
 ## 📄 Licenza
 
