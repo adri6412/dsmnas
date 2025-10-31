@@ -292,7 +292,29 @@ jobs:
         # Esegui build.sh (deve essere eseguito come root)
         echo "🚀 Avvio build ISO (questo richiederà 30-60 minuti)..."
         echo "⚠️ Assicurati di avere almeno 15GB di spazio disponibile"
-        sudo bash build.sh
+        
+        # Esegui build.sh salvando i log
+        # build.sh già usa | tee -a build.log per salvare i log
+        echo "📋 I log della build verranno salvati in live-build/build.log"
+        sudo bash build.sh 2>&1 | tee iso-build.log || {
+          BUILD_EXIT_CODE=${PIPESTATUS[0]}
+          echo "❌ Build ISO fallita con codice: $BUILD_EXIT_CODE"
+          echo "=== Ultime 100 righe del log ==="
+          tail -100 iso-build.log || true
+          if [ -f "build.log" ]; then
+            echo "=== Ultime 100 righe di build.log ==="
+            tail -100 build.log || true
+          fi
+          exit $BUILD_EXIT_CODE
+        }
+        
+        echo "✅ Build ISO completata"
+        
+        # Mostra i log recenti
+        if [ -f "build.log" ]; then
+          echo "=== Ultime 50 righe del log di build ==="
+          tail -50 build.log || true
+        fi
         
         # Verifica che l'ISO sia stata creata
         ISO_FILE=""
@@ -306,10 +328,14 @@ jobs:
         if [ -z "$ISO_FILE" ]; then
           echo "⚠️ ISO non trovata nella directory corrente"
           echo "Cerca ISO in tutte le directory:"
-          find . -name "*.iso" -type f 2>/dev/null | head -5
+          find . -name "*.iso" -type f 2>/dev/null | head -5 || true
+          echo "=== Contenuto directory live-build ==="
+          ls -lah . | head -20 || true
         else
           ISO_SIZE=$(du -h "$ISO_FILE" | cut -f1)
-          echo "✓ ISO creata: $ISO_FILE ($ISO_SIZE)"
+          echo "✅ ISO creata con successo!"
+          echo "   File: $ISO_FILE"
+          echo "   Dimensione: $ISO_SIZE"
           ls -lh "$ISO_FILE"
         fi
         
@@ -324,6 +350,17 @@ jobs:
           live-build/*.iso
         if-no-files-found: warn
         retention-days: 90
+        
+    - name: Upload ISO build logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: iso-build-logs-v${{ steps.version.outputs.version }}
+        path: |
+          live-build/iso-build.log
+          live-build/build.log
+        if-no-files-found: ignore
+        retention-days: 30
         
     - name: Create GitHub Release with ISO
       if: startsWith(github.ref, 'refs/tags/v') && success()
