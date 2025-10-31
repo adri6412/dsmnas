@@ -108,7 +108,12 @@ EOF
     fi
     
     # Configurazione base con opzioni APT per gestire dipendenze opzionali
-    # Usa --bootstrap-includes per includere il keyring e --bootstrap-options per disabilitare verifica GPG se necessario
+    # Configura variabile d'ambiente per debootstrap se keyring non disponibile
+    if [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+        export DEBOOTSTRAP_OPTS="--no-check-gpg"
+        log "⚠️ Keyring non trovato, uso --no-check-gpg per debootstrap"
+    fi
+    
     if ! lb config --architectures amd64 \
               --binary-images iso-hybrid \
               --distribution bookworm \
@@ -126,7 +131,6 @@ EOF
               --iso-application "ZFS NAS with Virtual DSM" \
               --iso-preparer "live-build" \
               --apt-options "--allow-unauthenticated" \
-              --bootstrap-options "--no-check-gpg" \
               2>&1 | tee -a build.log; then
         error "lb config fallito! Controlla build.log per dettagli"
     fi
@@ -331,6 +335,9 @@ EOF
 # Aggiungi pacchetti
 add_packages() {
     log "Configurazione pacchetti..."
+    
+    # Crea directory se non esiste
+    mkdir -p config/package-lists
     
     cat > config/package-lists/zfs-nas.list.chroot << 'EOF'
 # Base packages
