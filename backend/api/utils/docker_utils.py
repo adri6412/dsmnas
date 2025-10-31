@@ -2,6 +2,7 @@ import subprocess
 import json
 import os
 from typing import List, Dict, Optional, Any
+from .overlayfs import ensure_rw_mode, is_filesystem_writable
 
 def run_command(command: List[str], cwd: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -349,6 +350,24 @@ def configure_docker_data_root(data_root: str) -> Dict[str, Any]:
         }
     
     try:
+        # Assicura che il filesystem sia in modalità RW per scrivere in /etc/docker
+        if not ensure_rw_mode():
+            return {
+                "success": False,
+                "error": "Impossibile passare a modalità RW. Il filesystem potrebbe essere in sola lettura."
+            }
+        
+        # Verifica che /etc/docker sia scrivibile
+        etc_docker = "/etc/docker"
+        if not os.path.exists(etc_docker):
+            os.makedirs(etc_docker, mode=0o755, exist_ok=True)
+        
+        if not is_filesystem_writable(etc_docker):
+            return {
+                "success": False,
+                "error": "/etc/docker non è scrivibile. Verifica che overlayfs sia in modalità RW."
+            }
+        
         # Leggi la configurazione esistente o crea una nuova
         daemon_json_path = "/etc/docker/daemon.json"
         daemon_config = {}

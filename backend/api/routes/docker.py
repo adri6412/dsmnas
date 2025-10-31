@@ -4,6 +4,7 @@ from typing import List, Dict, Optional, Any
 import os
 import re
 from ..auth import get_current_admin
+from ..utils.overlayfs import ensure_rw_mode, is_filesystem_writable
 from ..utils.docker_utils import (
     is_docker_installed,
     get_container_status,
@@ -303,6 +304,24 @@ async def update_virtual_dsm_config(config: VirtualDSMConfig, current_admin = De
         
         # Rimuovi righe vuote multiple nella sezione environment
         content = re.sub(r'(\n\s+environment:\s*\n)(\n)+', r'\1', content)
+        
+        # Assicura che il filesystem sia in modalità RW per scrivere il file
+        # /opt/armnas dovrebbe essere sempre scrivibile grazie al bind mount,
+        # ma verifichiamo comunque
+        compose_dir = os.path.dirname(compose_file)
+        if not is_filesystem_writable(compose_dir):
+            # Prova a passare a RW se non siamo già in RW
+            if not ensure_rw_mode():
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Impossibile scrivere in {compose_dir}. Verifica che overlayfs sia in modalità RW o che /opt/armnas sia montato correttamente."
+                )
+            # Verifica di nuovo dopo il passaggio a RW
+            if not is_filesystem_writable(compose_dir):
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"{compose_dir} non è scrivibile dopo il passaggio a RW. Verifica i permessi."
+                )
         
         # Scrivi il file
         with open(compose_file, 'w') as f:

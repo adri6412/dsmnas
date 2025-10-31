@@ -6,6 +6,7 @@ import os
 import re
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Tuple
+from api.utils.overlayfs import ensure_rw_mode, is_filesystem_writable
 
 router = APIRouter()
 
@@ -198,6 +199,20 @@ async def configure_automount(device: str, mountpoint: str, fstype: Optional[str
     Configura un dispositivo per il montaggio automatico
     """
     try:
+        # Assicura che il filesystem sia in modalità RW per scrivere in /etc/fstab
+        if not ensure_rw_mode():
+            raise HTTPException(
+                status_code=500,
+                detail="Impossibile passare a modalità RW. Il filesystem potrebbe essere in sola lettura."
+            )
+        
+        # Verifica che /etc sia scrivibile
+        if not is_filesystem_writable("/etc"):
+            raise HTTPException(
+                status_code=500,
+                detail="/etc non è scrivibile. Verifica che overlayfs sia in modalità RW."
+            )
+        
         # Ottieni l'UUID del dispositivo
         uuid = await get_device_uuid(device)
 
@@ -235,6 +250,20 @@ async def remove_automount(device: str) -> None:
     Rimuove la configurazione di auto mount per un dispositivo
     """
     try:
+        # Assicura che il filesystem sia in modalità RW per scrivere in /etc/fstab
+        if not ensure_rw_mode():
+            raise HTTPException(
+                status_code=500,
+                detail="Impossibile passare a modalità RW. Il filesystem potrebbe essere in sola lettura."
+            )
+        
+        # Verifica che /etc sia scrivibile
+        if not is_filesystem_writable("/etc"):
+            raise HTTPException(
+                status_code=500,
+                detail="/etc non è scrivibile. Verifica che overlayfs sia in modalità RW."
+            )
+        
         # Ottieni l'UUID del dispositivo
         uuid = await get_device_uuid(device)
 
