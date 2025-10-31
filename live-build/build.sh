@@ -75,6 +75,19 @@ clean_build() {
 configure_build() {
     log "Configurazione live-build..."
     
+    # Crea directory config se non esiste
+    mkdir -p config
+    
+    # Crea file di preferenze APT per escludere ubuntu-keyring PRIMA di lb config
+    # Questo file verrà incluso nel chroot durante il bootstrap
+    mkdir -p config/includes.chroot/etc/apt/preferences.d
+    cat > config/includes.chroot/etc/apt/preferences.d/99-exclude-ubuntu-packages << 'EOF'
+# Escludi pacchetti Ubuntu-specific che non esistono in Debian
+Package: ubuntu-keyring
+Pin: release *
+Pin-Priority: -1
+EOF
+    
     # Configurazione base
     if ! lb config --architectures amd64 \
               --binary-images iso-hybrid \
@@ -201,29 +214,28 @@ EOF
 
     chmod +x config/hooks/0300-prepare-auto-install.hook.chroot
     
-    # Hook per escludere pacchetti Ubuntu-specific durante l'installazione
-    cat > config/hooks/0250-exclude-ubuntu-packages.hook.chroot << 'EOF'
+    # Hook per applicare preferenze APT ed escludere ubuntu-keyring
+    # Questo hook viene eseguito PRIMA dell'installazione dei pacchetti
+    cat > config/hooks/0100-exclude-ubuntu-packages.hook.chroot << 'EOF'
 #!/bin/bash
-# Escludi pacchetti Ubuntu-specific che non esistono in Debian
+# Assicura che ubuntu-keyring sia escluso PRIMA dell'installazione pacchetti
 set -e
 
-# Crea un file di preferenze APT per escludere ubuntu-keyring
-mkdir -p /etc/apt/preferences.d
-cat > /etc/apt/preferences.d/99-exclude-ubuntu-packages << 'PREFEOF'
+# Verifica che il file di preferenze sia presente
+if [ ! -f /etc/apt/preferences.d/99-exclude-ubuntu-packages ]; then
+    mkdir -p /etc/apt/preferences.d
+    cat > /etc/apt/preferences.d/99-exclude-ubuntu-packages << 'PREFEOF'
 Package: ubuntu-keyring
 Pin: release *
 Pin-Priority: -1
 PREFEOF
+fi
 
-# Pulisci eventuali riferimenti a ubuntu-keyring nelle dipendenze
-# Questo evita errori durante apt install
-echo "Package: ubuntu-keyring" >> /etc/apt/preferences.d/99-exclude-ubuntu-packages
-
-# Aggiorna cache APT
+# Aggiorna cache APT dopo aver impostato le preferenze
 apt-get update || true
 EOF
 
-    chmod +x config/hooks/0250-exclude-ubuntu-packages.hook.chroot
+    chmod +x config/hooks/0100-exclude-ubuntu-packages.hook.chroot
     
     log "✓ Hooks configurati"
 }
