@@ -422,10 +422,33 @@ chmod +x /usr/local/bin/setup-overlayfs.sh
 # Configura overlayfs usando initramfs (metodo più robusto)
 # Installa overlayroot se disponibile (pacchetto Debian per overlayfs)
 info "Installazione supporto overlayfs..."
-apt-get install -y overlayroot overlayrootfs || warn "overlayroot non disponibile, useremo metodo manuale"
+
+# Prova a installare overlayroot (il pacchetto si chiama solo "overlayroot")
+# È disponibile in Debian testing/unstable, ma non sempre in stable
+OVERLAYROOT_INSTALLED=false
+
+if apt-cache search overlayroot 2>/dev/null | grep -q "^overlayroot "; then
+    info "Pacchetto overlayroot trovato nel repository, installazione..."
+    if apt-get install -y overlayroot; then
+        OVERLAYROOT_INSTALLED=true
+        info "✓ overlayroot installato con successo"
+    else
+        warn "Installazione overlayroot fallita dal repository principale"
+    fi
+fi
+
+# Se non disponibile nel repository principale, prova da testing (opzionale)
+if [ "$OVERLAYROOT_INSTALLED" = "false" ]; then
+    warn "overlayroot non disponibile nel repository stable."
+    warn "Il sistema userà il metodo manuale per overlayfs."
+    warn ""
+    warn "Se vuoi installare overlayroot da testing (opzionale, rischioso):"
+    warn "  echo 'deb http://deb.debian.org/debian testing main' > /etc/apt/sources.list.d/testing.list"
+    warn "  apt-get update && apt-get install -t testing overlayroot"
+fi
 
 # Se overlayroot è installato, configura per usare tmpfs
-if command -v overlayroot-chroot &> /dev/null; then
+if [ "$OVERLAYROOT_INSTALLED" = "true" ] && command -v overlayroot-chroot &> /dev/null; then
     info "Configurazione overlayroot con tmpfs..."
     # Configura overlayroot per usare tmpfs (RAM)
     cat > /etc/overlayroot.conf << 'OVERLAYROOTEOF'
