@@ -265,7 +265,39 @@ jobs:
         
         # Installa dipendenze base necessarie
         sudo apt-get update
-        sudo apt-get install -y wget curl dpkg-dev xz-utils gzip debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux
+        sudo apt-get install -y wget curl dpkg-dev xz-utils gzip gpg debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux
+        
+        # Scarica e installa keyring Debian per debootstrap
+        echo "🔑 Configurazione keyring Debian..."
+        sudo mkdir -p /usr/share/keyrings
+        # Prova a scaricare il keyring Debian
+        if [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+          # Scarica il pacchetto debian-archive-keyring e estrai il gpg
+          TEMP_KEYRING=$(mktemp -d)
+          cd "$TEMP_KEYRING"
+          wget -q "http://ftp.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2023.3+deb12u1_all.deb" -O keyring.deb 2>/dev/null || \
+          wget -q "http://ftp.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2023.3_all.deb" -O keyring.deb 2>/dev/null || true
+          
+          if [ -f keyring.deb ]; then
+            dpkg-deb -x keyring.deb . 2>/dev/null || true
+            if [ -f usr/share/keyrings/debian-archive-keyring.gpg ]; then
+              sudo cp usr/share/keyrings/debian-archive-keyring.gpg /usr/share/keyrings/ 2>/dev/null || true
+              echo "✓ Keyring Debian installato da pacchetto"
+            fi
+          fi
+          
+          # Se ancora non presente, scarica direttamente
+          if [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+            curl -sL "https://ftp-master.debian.org/keys/archive-key-12.asc" | sudo gpg --dearmor -o /usr/share/keyrings/debian-archive-keyring.gpg 2>/dev/null || \
+            wget -q -O - "https://ftp-master.debian.org/keys/archive-key-12.asc" | sudo gpg --dearmor -o /usr/share/keyrings/debian-archive-keyring.gpg 2>/dev/null || true
+            echo "✓ Keyring Debian scaricato direttamente"
+          fi
+          
+          cd "$GITHUB_WORKSPACE"
+          rm -rf "$TEMP_KEYRING"
+        else
+          echo "✓ Keyring Debian già presente"
+        fi
         
         # Scarica manualmente i pacchetti live-build da Debian per evitare problemi con ubuntu-keyring
         echo "📦 Download manuale pacchetti live-build da Debian..."

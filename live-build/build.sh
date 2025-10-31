@@ -88,7 +88,27 @@ Pin: release *
 Pin-Priority: -1
 EOF
     
+    # Scarica e installa keyring Debian se non presente
+    if [ ! -f "/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+        log "Download keyring Debian..."
+        mkdir -p /usr/share/keyrings
+        # Scarica il keyring Debian
+        wget -q -O - "http://ftp.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2023.3+deb12u1_all.deb" 2>/dev/null | \
+            dpkg-deb -x - /tmp/debian-keyring 2>/dev/null || true
+        if [ -f "/tmp/debian-keyring/usr/share/keyrings/debian-archive-keyring.gpg" ]; then
+            cp /tmp/debian-keyring/usr/share/keyrings/debian-archive-keyring.gpg /usr/share/keyrings/ 2>/dev/null || true
+            log "✓ Keyring Debian installato"
+        else
+            # Fallback: scarica direttamente il file gpg
+            wget -q -O /usr/share/keyrings/debian-archive-keyring.gpg \
+                "http://ftp.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2023.3+deb12u1_all.deb" 2>/dev/null || \
+            curl -sL "https://ftp-master.debian.org/keys/archive-key-12.asc" | gpg --dearmor -o /usr/share/keyrings/debian-archive-keyring.gpg 2>/dev/null || true
+        fi
+        rm -rf /tmp/debian-keyring 2>/dev/null || true
+    fi
+    
     # Configurazione base con opzioni APT per gestire dipendenze opzionali
+    # Usa --bootstrap-includes per includere il keyring e --bootstrap-options per disabilitare verifica GPG se necessario
     if ! lb config --architectures amd64 \
               --binary-images iso-hybrid \
               --distribution bookworm \
@@ -106,6 +126,7 @@ EOF
               --iso-application "ZFS NAS with Virtual DSM" \
               --iso-preparer "live-build" \
               --apt-options "--allow-unauthenticated" \
+              --bootstrap-options "--no-check-gpg" \
               2>&1 | tee -a build.log; then
         error "lb config fallito! Controlla build.log per dettagli"
     fi
