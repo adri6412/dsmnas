@@ -275,17 +275,7 @@ jobs:
         cd "$TMPDIR"
         
         mkdir -p ubuntu-keyring/DEBIAN
-        cat > ubuntu-keyring/DEBIAN/control <<EOF
-Package: ubuntu-keyring
-Version: 2012.05.19-1
-Architecture: all
-Maintainer: ArmNAS Dummy Package <noreply@armnas.local>
-Description: Dummy ubuntu-keyring package for Debian builds
- This is a dummy package to satisfy dependencies requiring ubuntu-keyring
- when building Debian images on Ubuntu runners.
-Priority: optional
-Section: misc
-EOF
+        printf "Package: ubuntu-keyring\nVersion: 2012.05.19-1\nArchitecture: all\nMaintainer: ArmNAS Dummy Package <noreply@armnas.local>\nDescription: Dummy ubuntu-keyring package for Debian builds\n This is a dummy package to satisfy dependencies requiring ubuntu-keyring\n when building Debian images on Ubuntu runners.\nPriority: optional\nSection: misc\n" > ubuntu-keyring/DEBIAN/control
         
         mkdir -p ubuntu-keyring/usr/share/doc/ubuntu-keyring
         touch ubuntu-keyring/usr/share/doc/ubuntu-keyring/copyright
