@@ -137,10 +137,21 @@ EOF
               --iso-publisher "ArmNAS Project" \
               --iso-application "ZFS NAS with Virtual DSM" \
               --iso-preparer "live-build" \
-              --apt-options "--allow-unauthenticated" \
+              --apt-options "--allow-unauthenticated --assume-yes" \
               2>&1 | tee -a build.log; then
         error "lb config fallito! Controlla build.log per dettagli"
     fi
+    
+    # Crea configurazione APT non-interattiva nel chroot (prima di bootstrap_archives)
+    mkdir -p config/includes.bootstrap/etc/apt/apt.conf.d
+    cat > config/includes.bootstrap/etc/apt/apt.conf.d/90noninteractive << 'EOF'
+APT::Get::Assume-Yes "true";
+APT::Get::Force-Yes "false";
+APT::Install-Recommends "false";
+DPkg::Options::="--force-confdef";
+DPkg::Options::="--force-confold";
+APT::Get::Fix-Broken "true";
+EOF
     
     log "Configurazione completata"
 }
