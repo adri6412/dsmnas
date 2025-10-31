@@ -26,6 +26,9 @@ on:
 jobs:
   build-installer:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Necessario per creare release e tag
+      actions: read    # Necessario per leggere gli artifact
     
     steps:
     - name: Checkout repository
