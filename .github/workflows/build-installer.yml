@@ -270,73 +270,58 @@ jobs:
         # Scarica manualmente i pacchetti live-build da Debian per evitare problemi con ubuntu-keyring
         echo "📦 Download manuale pacchetti live-build da Debian..."
         DEBIAN_MIRROR="http://ftp.debian.org/debian"
-        DEBIAN_SUITE="bookworm"
-        ARCH="amd64"
         DOWNLOAD_DIR=$(mktemp -d)
         cd "$DOWNLOAD_DIR"
         
-        # Funzione per scaricare pacchetto e dipendenze
-        download_package() {
-          local pkg=$1
-          echo "Scaricando $pkg..."
-          wget -q "${DEBIAN_MIRROR}/dists/${DEBIAN_SUITE}/main/binary-${ARCH}/Packages.xz" -O Packages.xz 2>/dev/null || \
-          wget -q "${DEBIAN_MIRROR}/dists/${DEBIAN_SUITE}/main/binary-${ARCH}/Packages.gz" -O Packages.gz 2>/dev/null || true
-          
-          if [ -f Packages.xz ]; then
-            xzcat Packages.xz | grep -A 20 "^Package: ${pkg}$" | grep "^Filename:" | cut -d' ' -f2 | head -1 | while read filename; do
-              if [ -n "$filename" ]; then
-                wget -q "${DEBIAN_MIRROR}/${filename}" -O "${pkg}.deb" || true
-              fi
-            done
-          elif [ -f Packages.gz ]; then
-            zcat Packages.gz | grep -A 20 "^Package: ${pkg}$" | grep "^Filename:" | cut -d' ' -f2 | head -1 | while read filename; do
-              if [ -n "$filename" ]; then
-                wget -q "${DEBIAN_MIRROR}/${filename}" -O "${pkg}.deb" || true
-              fi
-            done
-          fi
-        }
-        
-        # Prova metodo alternativo più semplice: usa pool directory
-        echo "Tentativo download diretto da pool..."
+        # Cerca le versioni corrette dei pacchetti nel repository Debian (senza autenticazione)
+        echo "Ricerca versioni pacchetti Debian..."
         for pkg in live-build live-boot live-config; do
-          # Prova diverse versioni comuni
-          for version in "20230615" "20230515" "20230415" "20230315"; do
-            for arch in "all" "$ARCH"; do
-              wget -q "${DEBIAN_MIRROR}/pool/main/l/${pkg}/${pkg}_${version}_${arch}.deb" -O "${pkg}.deb" 2>/dev/null && break 2 || true
+          # Scarica l'indice Packages e cerca il pacchetto
+          echo "Scaricando informazioni per ${pkg}..."
+          wget -q -O - "${DEBIAN_MIRROR}/dists/bookworm/main/binary-amd64/Packages.xz" 2>/dev/null | xzcat 2>/dev/null | \
+            grep -A 30 "^Package: ${pkg}$" | grep "^Filename:" | head -1 | cut -d' ' -f2 | \
+            while read filename; do
+              if [ -n "$filename" ]; then
+                echo "Trovato: ${filename}"
+                wget -q "${DEBIAN_MIRROR}/${filename}" -O "${pkg}.deb" && echo "✓ ${pkg} scaricato" || echo "✗ Errore download ${pkg}"
+              fi
             done
-          done
-          # Se non trovato, prova download con apt download senza installazione
+          
+          # Se non trovato con xz, prova con gz
           if [ ! -f "${pkg}.deb" ]; then
-            echo "Download ${pkg} usando apt download..."
-            cd /tmp
-            sudo apt-get download ${pkg} 2>/dev/null || true
-            if [ -f ${pkg}_*.deb ]; then
-              mv ${pkg}_*.deb "${DOWNLOAD_DIR}/${pkg}.deb"
-            fi
-            cd "$DOWNLOAD_DIR"
+            wget -q -O - "${DEBIAN_MIRROR}/dists/bookworm/main/binary-amd64/Packages.gz" 2>/dev/null | zcat 2>/dev/null | \
+              grep -A 30 "^Package: ${pkg}$" | grep "^Filename:" | head -1 | cut -d' ' -f2 | \
+              while read filename; do
+                if [ -n "$filename" ]; then
+                  wget -q "${DEBIAN_MIRROR}/${filename}" -O "${pkg}.deb" && echo "✓ ${pkg} scaricato" || true
+                fi
+              done
           fi
         done
         
-        # Se ancora non trovati, usa i pacchetti Ubuntu (potrebbero funzionare)
-        if [ ! -f "live-build.deb" ]; then
-          echo "⚠️ Pacchetti Debian non trovati, uso Ubuntu come fallback..."
-          sudo apt-get install -y live-build live-boot live-config 2>/dev/null || {
-            # Ultima risorsa: installa da Ubuntu con --allow-unauthenticated
-            sudo apt-get install -y --allow-unauthenticated live-build live-boot live-config || true
-          }
-        else
-          # Installa i pacchetti scaricati manualmente
-          echo "Installazione pacchetti scaricati..."
+        # Se i pacchetti sono stati scaricati, installali
+        if ls *.deb 1> /dev/null 2>&1; then
+          echo "Installazione pacchetti Debian scaricati..."
           sudo dpkg -i *.deb 2>/dev/null || {
-            # Risolvi dipendenze
             sudo apt-get install -f -y
             sudo dpkg -i *.deb || true
           }
+          INSTALLED_DEBIAN=true
+        else
+          INSTALLED_DEBIAN=false
         fi
         
         cd "$GITHUB_WORKSPACE"
         rm -rf "$DOWNLOAD_DIR"
+        
+        # Se non installato da Debian, usa Ubuntu (potrebbe funzionare comunque)
+        if [ "$INSTALLED_DEBIAN" != "true" ]; then
+          echo "⚠️ Download Debian fallito, installo da Ubuntu..."
+          sudo apt-get install -y live-build live-boot live-config || {
+            echo "⚠️ Installazione normale fallita, provo con --allow-unauthenticated..."
+            sudo apt-get install -y --allow-unauthenticated live-build live-boot live-config || true
+          }
+        fi
         
         echo "✓ Dipendenze installate"
         
