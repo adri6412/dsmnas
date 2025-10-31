@@ -535,13 +535,12 @@ cat > /etc/udev/rules.d/99-armnas-mount.rules << EOF
 ACTION=="add", KERNEL=="sd[a-z][0-9]", RUN+="/bin/mkdir -p /mnt/nas_data", RUN+="/bin/mount /dev/%k /mnt/nas_data"
 EOF
 
-# Configura overlayfs per proteggere la scheda SD dalle scritture eccessive
-info "Configurazione overlayfs per proteggere la scheda SD..."
-# Crea directory per overlayfs
-mkdir -p /overlay/{upper,work}
+# Configura zram-config per proteggere la scheda SD dalle scritture eccessive
+info "Configurazione zram-config per ridurre scritture su SD..."
+info "Riferimento: https://github.com/ecdye/zram-config"
 
-# Crea script per configurare overlayfs all'avvio
-cat > /usr/local/bin/setup-overlayfs.sh << 'OVERLAYEOF'
+# Installa zram-config dal repository GitHub
+# Verifica se zram-config è già installato
 #!/bin/bash
 # Script per configurare overlayfs al boot
 # Questo script monta overlayfs su / per ridurre le scritture sulla SD
@@ -621,6 +620,7 @@ cat > /usr/local/bin/overlay-rw << 'OVERLAYRWEOF'
 #!/bin/bash
 # Script per passare overlayfs da modalità RO (RAM) a RW (SD card) SENZA RIAVVIO
 # Sincronizza le modifiche dalla RAM alla SD e cambia l'upper directory sulla SD
+# Gestisce anche /storage e pool ZFS per permettere scritture persistenti
 
 set -e
 
@@ -629,6 +629,75 @@ OVERLAY_WORK="/overlay/work"
 OVERLAY_UPPER_SD="/overlay/upper-sd"
 OVERLAY_WORK_SD="/overlay/work-sd"
 OVERLAY_STATE="/var/lib/overlay-state"
+
+# Funzione per gestire /storage e pool ZFS
+handle_storage_rw() {
+    echo "🗄️  Gestione /storage per modalità RW..."
+    
+    # 1. Verifica se /storage è montato
+    if mountpoint -q /storage 2>/dev/null; then
+        echo "   /storage è montato, verifica tipo..."
+        
+        # Verifica se è un mount overlay/tmpfs che blocca ZFS
+        STORAGE_FSTYPE=$(findmnt -n -o FSTYPE /storage 2>/dev/null || echo "unknown")
+        STORAGE_SOURCE=$(findmnt -n -o SOURCE /storage 2>/dev/null || echo "unknown")
+        
+        if [ "$STORAGE_FSTYPE" = "overlay" ] || [ "$STORAGE_FSTYPE" = "tmpfs" ] || echo "$STORAGE_SOURCE" | grep -q "overlay\|tmpfs"; then
+            echo "   /storage è montato come $STORAGE_FSTYPE (overlay/tmpfs)"
+            echo "   Smontaggio per permettere accesso diretto a ZFS..."
+            
+            # Esporta pool ZFS se esistono
+            if command -v zpool >/dev/null 2>&1; then
+                if zpool list storage 2>/dev/null | grep -q "storage"; then
+                    echo "   Esportazione pool ZFS 'storage'..."
+                    zpool export storage 2>/dev/null || true
+                fi
+            fi
+            
+            # Smonta /storage
+            umount /storage 2>/dev/null || umount -l /storage 2>/dev/null || true
+            echo "   ✓ /storage smontato"
+        elif [ "$STORAGE_FSTYPE" = "zfs" ]; then
+            echo "   ✓ /storage già montato come ZFS (niente da fare)"
+            return 0
+        else
+            echo "   ℹ️  /storage montato come $STORAGE_FSTYPE"
+        fi
+    fi
+    
+    # 2. Se overlayfs è attivo, monta /storage dalla SD originale
+    if [ -n "$LOWER_ROOT" ] && [ -d "$LOWER_ROOT" ]; then
+        if [ -d "$LOWER_ROOT/storage" ]; then
+            echo "   Montaggio /storage dalla SD originale ($LOWER_ROOT/storage)..."
+            mkdir -p /storage
+            
+            # Smonta prima se necessario
+            mountpoint -q /storage 2>/dev/null && umount /storage 2>/dev/null || true
+            
+            # Monta dalla SD originale con bind mount
+            if mount --bind "$LOWER_ROOT/storage" /storage 2>/dev/null; then
+                echo "   ✓ /storage montato dalla SD originale (RW diretto)"
+            else
+                echo "   ⚠️  Impossibile montare /storage dalla SD, sarà disponibile normalmente"
+            fi
+        fi
+    fi
+    
+    # 3. Importa pool ZFS se esistono
+    if command -v zpool >/dev/null 2>&1; then
+        # Verifica se ci sono pool da importare
+        if zpool import 2>/dev/null | grep -q "pool: storage"; then
+            echo "   Pool ZFS 'storage' disponibile per importazione..."
+            if zpool import storage 2>/dev/null; then
+                echo "   ✓ Pool ZFS 'storage' importato"
+            else
+                echo "   ℹ️  Pool ZFS non importato (potrebbe non esistere o essere già montato)"
+            fi
+        fi
+    fi
+    
+    echo "   ✓ Gestione /storage completata"
+}
 
 # Trova il lower root (SD originale)
 LOWER_ROOT=""
@@ -648,6 +717,9 @@ if [ -z "$LOWER_ROOT" ] || [ ! -d "$LOWER_ROOT" ]; then
     echo "⚠️ Overlayfs non attivo - sistema già in modalità RW (scritture dirette su SD)"
     mkdir -p "$(dirname $OVERLAY_STATE)"
     echo "rw" > "$OVERLAY_STATE"
+    
+    # Gestisci comunque /storage per liberarlo da eventuali mount overlay residui
+    handle_storage_rw
     exit 0
 fi
 
@@ -660,6 +732,8 @@ if [ -f "$OVERLAY_STATE" ] && [ "$(cat $OVERLAY_STATE 2>/dev/null)" = "rw" ]; th
         UPPER_SOURCE=$(findmnt -n -o SOURCE "$OVERLAY_UPPER" 2>/dev/null || echo "")
         if [ -n "$UPPER_SOURCE" ] && echo "$UPPER_SOURCE" | grep -q "$LOWER_ROOT\|upper-sd"; then
             echo "✓ Sistema già in modalità RW (upper directory sulla SD)"
+            # Gestisci /storage anche se già in RW
+            handle_storage_rw
             exit 0
         fi
     fi
@@ -707,6 +781,9 @@ else
     }
 fi
 
+# Gestisci /storage per modalità RW
+handle_storage_rw
+
 # Salva stato RW
 mkdir -p "$(dirname $OVERLAY_STATE)"
 echo "rw" > "$OVERLAY_STATE"
@@ -718,6 +795,7 @@ fi
 
 echo ""
 echo "✅ Sistema ora in modalità RW - le scritture vanno sulla SD card"
+echo "   /storage è ora accessibile per pool ZFS"
 echo "   Nessun riavvio necessario!"
 OVERLAYRWEOF
 
@@ -727,6 +805,7 @@ cat > /usr/local/bin/overlay-ro << 'OVERLAYROEOF'
 #!/bin/bash
 # Script per passare overlayfs da modalità RW (SD) a RO (RAM) SENZA RIAVVIO
 # Torna a scrivere solo in RAM, le modifiche non vengono salvate sulla SD
+# Gestisce anche /storage e pool ZFS
 
 set -e
 
@@ -734,6 +813,35 @@ OVERLAY_UPPER="/overlay/upper"
 OVERLAY_WORK="/overlay/work"
 OVERLAY_UPPER_SD="/overlay/upper-sd"
 OVERLAY_STATE="/var/lib/overlay-state"
+
+# Funzione per gestire /storage per modalità RO
+handle_storage_ro() {
+    echo "🗄️  Gestione /storage per modalità RO..."
+    
+    # 1. Esporta pool ZFS se esistono (per evitare conflitti)
+    if command -v zpool >/dev/null 2>&1; then
+        if zpool list storage 2>/dev/null | grep -q "storage"; then
+            echo "   Pool ZFS 'storage' trovato, esportazione..."
+            zpool export storage 2>/dev/null || {
+                echo "   ⚠️  Impossibile esportare pool ZFS (potrebbe essere in uso)"
+                echo "   Prova a chiudere applicazioni che usano /storage"
+            }
+        fi
+    fi
+    
+    # 2. Smonta /storage se montato
+    if mountpoint -q /storage 2>/dev/null; then
+        echo "   Smontaggio /storage..."
+        umount /storage 2>/dev/null || umount -l /storage 2>/dev/null || {
+            echo "   ⚠️  Impossibile smontare /storage (potrebbe essere in uso)"
+        }
+    fi
+    
+    # 3. In modalità RO, /storage sarà gestito dall'overlay
+    #    Le modifiche a /storage andranno solo in RAM
+    echo "   ℹ️  In modalità RO, le modifiche a /storage vanno in RAM (non persistenti)"
+    echo "   ✓ Gestione /storage completata"
+}
 
 # Trova il lower root (SD originale)
 LOWER_ROOT=""
@@ -751,6 +859,9 @@ if [ -z "$LOWER_ROOT" ] || [ ! -d "$LOWER_ROOT" ]; then
     echo "⚠️ Overlayfs non attivo - sistema già in modalità normale"
     mkdir -p "$(dirname $OVERLAY_STATE)"
     echo "ro" > "$OVERLAY_STATE"
+    
+    # Gestisci comunque /storage
+    handle_storage_ro
     exit 0
 fi
 
@@ -762,10 +873,15 @@ if [ -f "$OVERLAY_STATE" ] && [ "$(cat $OVERLAY_STATE 2>/dev/null)" = "ro" ]; th
         UPPER_SOURCE=$(findmnt -n -o SOURCE "$OVERLAY_UPPER" 2>/dev/null || echo "")
         if [ -n "$UPPER_SOURCE" ] && echo "$UPPER_SOURCE" | grep -q "tmpfs"; then
             echo "✓ Sistema già in modalità RO (upper directory in RAM/tmpfs)"
+            # Gestisci /storage anche se già in RO
+            handle_storage_ro
             exit 0
         fi
     fi
 fi
+
+# Gestisci /storage prima di modificare l'overlay
+handle_storage_ro
 
 # Se l'upper è sulla SD, sincronizza le modifiche e rimonta in RAM
 if mountpoint -q "$OVERLAY_UPPER" 2>/dev/null; then
@@ -809,6 +925,8 @@ fi
 
 echo ""
 echo "✅ Sistema ora in modalità RO - le scritture vanno in RAM (temporanee)"
+echo "   /storage non è disponibile per pool ZFS in modalità RO"
+echo "   Usa 'overlay-rw' per tornare in modalità RW e usare ZFS"
 echo "   Nessun riavvio necessario!"
 echo "   Le modifiche non verranno salvate permanentemente sulla SD."
 OVERLAYROEOF
@@ -1246,6 +1364,63 @@ $REPO_DIR/scripts/fix_permissions.sh
 # Copia gli script di correzione
 cp $REPO_DIR/scripts/fix_nginx.sh $INSTALL_DIR/
 cp $REPO_DIR/scripts/fix_backend.sh $INSTALL_DIR/
+
+# Disabilita autologin e auto-esecuzione installer dopo installazione
+info "Disabilitazione autologin e auto-esecuzione installer..."
+
+# 1. Rimuovi autologin di root
+if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then
+    rm -f /etc/systemd/system/getty@tty1.service.d/autologin.conf
+    info "✓ Autologin disabilitato"
+fi
+
+# 2. Rimuovi configurazione getty override se esiste
+if [ -f /etc/systemd/system/getty@tty1.service.d/override.conf ]; then
+    rm -f /etc/systemd/system/getty@tty1.service.d/override.conf
+fi
+
+# 3. Pulisci .profile di root dal codice di auto-esecuzione
+if [ -f /root/.profile ]; then
+    # Rimuovi tutte le righe relative a installer_dsm.sh e FLAG_FILE
+    sed -i '/installer_dsm\.sh/d' /root/.profile 2>/dev/null || true
+    sed -i '/FLAG_FILE/d' /root/.profile 2>/dev/null || true
+    sed -i '/ARM NAS - Installazione Automatica/d' /root/.profile 2>/dev/null || true
+    sed -i '/INSTALLER=/d' /root/.profile 2>/dev/null || true
+    
+    # Se .profile è quasi vuoto, ricrealo con versione standard
+    if [ $(wc -l < /root/.profile 2>/dev/null || echo 0) -lt 5 ]; then
+        cat > /root/.profile << 'PROFILEEOF'
+# ~/.profile: executed by Bourne-compatible login shells.
+
+if [ "$BASH" ]; then
+  if [ -f ~/.bashrc ]; then
+    . ~/.bashrc
+  fi
+fi
+
+mesg n 2> /dev/null || true
+PROFILEEOF
+    fi
+    
+    info "✓ Auto-esecuzione installer rimossa da .profile"
+fi
+
+# 4. Crea flag file per indicare installazione completata
+mkdir -p /var/lib/armnas
+echo "COMPLETED: $(date -Iseconds)" > /var/lib/armnas/installer-completed
+echo "Installer: ARM NAS installation script" >> /var/lib/armnas/installer-completed
+info "✓ Flag file installazione creato"
+
+# 5. Ricarica configurazione systemd
+systemctl daemon-reload 2>/dev/null || true
+
+# 6. Disabilita eventuali servizi auto-install se esistono
+if systemctl is-enabled auto-install-dsm.service 2>/dev/null; then
+    systemctl disable auto-install-dsm.service 2>/dev/null || true
+    info "✓ Servizio auto-install disabilitato"
+fi
+
+info "✓ Sistema configurato per login normale (richiederà password)"
 
 # Messaggio finale
 info "Installazione completata!"

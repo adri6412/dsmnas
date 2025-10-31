@@ -110,27 +110,119 @@ if [ ! -x "$INSTALLER_SCRIPT" ]; then
     exit 1
 fi
 
-log "Esecuzione installer_dsm.sh in modalità automatica..."
+log "Esecuzione installer_dsm.sh (makeself) in modalità automatica..."
 log "Questo processo potrebbe richiedere diversi minuti..."
 
-# Cambia nella directory dello script
-SCRIPT_DIR=$(dirname "$INSTALLER_SCRIPT")
-SCRIPT_NAME=$(basename "$INSTALLER_SCRIPT")
-
-cd "$SCRIPT_DIR" || {
-    error "Impossibile cambiare directory: $SCRIPT_DIR"
-    exit 1
-}
-
-# Esegui lo script installer_dsm.sh in modalità automatica
-if ! ./"$SCRIPT_NAME" --auto; then
-    INSTALL_EXIT_CODE=$?
-    error "Installazione fallita con codice: $INSTALL_EXIT_CODE"
-    echo "FAILED: exit code $INSTALL_EXIT_CODE" > "$FLAG_FILE"
-    exit $INSTALL_EXIT_CODE
+# Verifica se è un archivio makeself
+if ! file "$INSTALLER_SCRIPT" | grep -qi "makeself\|shell script"; then
+    warn "Il file potrebbe non essere un archivio makeself valido"
+    warn "$(file "$INSTALLER_SCRIPT")"
 fi
 
-INSTALL_EXIT_CODE=$?
+# Directory temporanea per estrazione
+EXTRACT_DIR="/tmp/armnas-installer-$$"
+mkdir -p "$EXTRACT_DIR"
+
+log "Estrazione archivio makeself in $EXTRACT_DIR..."
+
+# Estrai il makeself esplicitamente invece di eseguirlo
+# Makeself supporta --target per specificare dove estrarre
+if "$INSTALLER_SCRIPT" --target "$EXTRACT_DIR" --noexec; then
+    log "✓ Archivio estratto con successo"
+else
+    error "Impossibile estrarre archivio makeself"
+    error "Provo metodo alternativo..."
+    
+    # Metodo alternativo: cerca il punto di separazione nell'archivio
+    # I makeself hanno un marker che separa lo script dall'archivio tar.gz
+    SKIP_LINES=$(grep -n -a "^__ARCHIVE_FOLLOWS__" "$INSTALLER_SCRIPT" 2>/dev/null | cut -d: -f1)
+    
+    if [ -n "$SKIP_LINES" ]; then
+        SKIP_LINES=$((SKIP_LINES + 1))
+        log "Trovato marker archivio alla riga $SKIP_LINES"
+        log "Estrazione manuale dell'archivio..."
+        
+        tail -n +$SKIP_LINES "$INSTALLER_SCRIPT" | tar -xzf - -C "$EXTRACT_DIR" 2>/dev/null || {
+            error "Estrazione manuale fallita"
+            rm -rf "$EXTRACT_DIR"
+            echo "FAILED: extraction failed" > "$FLAG_FILE"
+            exit 1
+        }
+    else
+        error "Impossibile trovare marker archivio nel makeself"
+        rm -rf "$EXTRACT_DIR"
+        echo "FAILED: invalid makeself" > "$FLAG_FILE"
+        exit 1
+    fi
+fi
+
+# Cerca lo script principale nell'archivio estratto
+# Tipicamente i makeself eseguono uno script chiamato dal parametro --startup
+MAIN_SCRIPT=""
+
+# Cerca possibili script principali
+for script_name in "install.sh" "setup.sh" "installer.sh" "main.sh" "run.sh"; do
+    if [ -f "$EXTRACT_DIR/$script_name" ]; then
+        MAIN_SCRIPT="$EXTRACT_DIR/$script_name"
+        log "Trovato script principale: $script_name"
+        break
+    fi
+done
+
+# Se non trovato, cerca il primo .sh eseguibile
+if [ -z "$MAIN_SCRIPT" ]; then
+    MAIN_SCRIPT=$(find "$EXTRACT_DIR" -maxdepth 2 -name "*.sh" -type f -executable 2>/dev/null | head -1)
+    if [ -n "$MAIN_SCRIPT" ]; then
+        log "Trovato script: $(basename "$MAIN_SCRIPT")"
+    fi
+fi
+
+# Se ancora non trovato, lista il contenuto
+if [ -z "$MAIN_SCRIPT" ]; then
+    error "Nessuno script principale trovato nell'archivio"
+    error "Contenuto estratto:"
+    ls -la "$EXTRACT_DIR" >&2
+    
+    # Prova a eseguire direttamente il makeself con --auto
+    log "Fallback: esecuzione diretta del makeself..."
+    cd "$(dirname "$INSTALLER_SCRIPT")" || exit 1
+    
+    if ! "$INSTALLER_SCRIPT" --auto; then
+        INSTALL_EXIT_CODE=$?
+        error "Installazione fallita con codice: $INSTALL_EXIT_CODE"
+        rm -rf "$EXTRACT_DIR"
+        echo "FAILED: exit code $INSTALL_EXIT_CODE" > "$FLAG_FILE"
+        exit $INSTALL_EXIT_CODE
+    fi
+    
+    INSTALL_EXIT_CODE=0
+else
+    # Esegui lo script principale trovato
+    log "Esecuzione: $(basename "$MAIN_SCRIPT")"
+    chmod +x "$MAIN_SCRIPT"
+    
+    cd "$EXTRACT_DIR" || {
+        error "Impossibile cambiare directory: $EXTRACT_DIR"
+        rm -rf "$EXTRACT_DIR"
+        exit 1
+    }
+    
+    # Esegui con parametro --auto se supportato
+    if ! bash "$MAIN_SCRIPT" --auto 2>&1 | tee /var/log/armnas-install.log; then
+        INSTALL_EXIT_CODE=$?
+        error "Installazione fallita con codice: $INSTALL_EXIT_CODE"
+        log "Log salvato in: /var/log/armnas-install.log"
+        rm -rf "$EXTRACT_DIR"
+        echo "FAILED: exit code $INSTALL_EXIT_CODE" > "$FLAG_FILE"
+        exit $INSTALL_EXIT_CODE
+    fi
+    
+    INSTALL_EXIT_CODE=0
+fi
+
+# Pulizia directory temporanea
+log "Pulizia file temporanei..."
+rm -rf "$EXTRACT_DIR"
 
 if [ $INSTALL_EXIT_CODE -eq 0 ]; then
     log "✓ Installazione completata con successo!"

@@ -172,35 +172,99 @@ EOF
     log "✓ Autologin configurato"
 }
 
-# Setup auto-install service
-setup_auto_install_service() {
-    log "Configurazione servizio auto-install..."
+# Setup auto-install via .profile
+setup_auto_install_profile() {
+    log "Configurazione auto-esecuzione installer_dsm.sh al login di root..."
     
-    mkdir -p config/includes.chroot/etc/systemd/system
+    mkdir -p config/includes.chroot/root
     
-    cat > config/includes.chroot/etc/systemd/system/auto-install-dsm.service << 'EOF'
-[Unit]
-Description=Auto-install Virtual DSM on First Boot
-After=network-online.target local-fs.target systemd-udev-settle.service
-Wants=network-online.target
-Conflicts=shutdown.target
-Before=shutdown.target
+    # Crea .profile per root che esegue installer_dsm.sh al primo login
+    cat > config/includes.chroot/root/.profile << 'EOF'
+# ~/.profile per root - esegue installer_dsm.sh al primo login
 
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/root/auto-install-dsm.sh
-StandardOutput=journal+console
-StandardError=journal+console
-TimeoutStartSec=3600
-TimeoutStopSec=30
-Restart=no
+# Flag file per verificare se già eseguito
+FLAG_FILE="/var/lib/armnas/installer-completed"
 
-[Install]
-WantedBy=multi-user.target
+# Se già eseguito, non fare nulla
+if [ -f "$FLAG_FILE" ]; then
+    echo "Installazione già completata."
+    echo "Per rieseguire: sudo rm -f $FLAG_FILE"
+    return
+fi
+
+# Cerca installer_dsm.sh
+INSTALLER=""
+if [ -f "/root/installer_dsm.sh" ]; then
+    INSTALLER="/root/installer_dsm.sh"
+elif [ -f "/opt/installer_dsm.sh" ]; then
+    INSTALLER="/opt/installer_dsm.sh"
+else
+    # Cerca in /root ricorsivamente
+    INSTALLER=$(find /root -name "installer_dsm.sh" -type f 2>/dev/null | head -1)
+fi
+
+# Se trovato, esegui
+if [ -n "$INSTALLER" ] && [ -f "$INSTALLER" ]; then
+    echo ""
+    echo "=========================================="
+    echo "  ARM NAS - Installazione Automatica"
+    echo "=========================================="
+    echo ""
+    echo "Avvio installazione da: $INSTALLER"
+    echo "Attendi, questo processo richiede alcuni minuti..."
+    echo ""
+    
+    # Attendi qualche secondo per far stabilizzare il sistema
+    sleep 3
+    
+    # Rendi eseguibile
+    chmod +x "$INSTALLER"
+    
+    # Esegui installer_dsm.sh direttamente (è un makeself che si auto-estrae)
+    # Il makeself gestisce l'estrazione e l'esecuzione automaticamente
+    if "$INSTALLER"; then
+        echo ""
+        echo "✓ Installazione completata con successo!"
+        
+        # Crea flag file
+        mkdir -p "$(dirname "$FLAG_FILE")"
+        echo "COMPLETED: $(date)" > "$FLAG_FILE"
+        
+        # Rimuovi questo script da .profile per evitare riesecuzione
+        sed -i '/installer_dsm.sh/d' /root/.profile 2>/dev/null || true
+        sed -i '/FLAG_FILE/,/^fi$/d' /root/.profile 2>/dev/null || true
+        
+        # Disabilita autologin
+        rm -f /etc/systemd/system/getty@tty1.service.d/autologin.conf 2>/dev/null || true
+        systemctl daemon-reload 2>/dev/null || true
+        
+        echo ""
+        echo "Sistema configurato! Riavvio tra 5 secondi..."
+        sleep 5
+        reboot
+    else
+        echo ""
+        echo "✗ Installazione fallita!"
+        echo "Controlla i log e riprova manualmente: $INSTALLER"
+        echo "FAILED: $(date)" > "$FLAG_FILE"
+    fi
+else
+    echo ""
+    echo "⚠️  ATTENZIONE: installer_dsm.sh non trovato!"
+    echo "Cercato in:"
+    echo "  - /root/installer_dsm.sh"
+    echo "  - /opt/installer_dsm.sh"
+    echo ""
+    echo "Per eseguire manualmente:"
+    echo "  1. Trova il file: find / -name installer_dsm.sh"
+    echo "  2. Esegui: /path/to/installer_dsm.sh"
+    echo ""
+fi
 EOF
 
-    log "✓ Servizio auto-install creato"
+    chmod +x config/includes.chroot/root/.profile
+    
+    log "✓ Auto-esecuzione configurata in /root/.profile"
 }
 
 # Setup hooks
@@ -320,29 +384,26 @@ EOF
 
     chmod +x config/hooks/0050-exclude-ubuntu-packages.hook.chroot
     
-    # Hook per abilitare il servizio
-    cat > config/hooks/0100-enable-auto-install.hook.chroot << 'EOF'
+    # Hook per creare directory per flag file installazione
+    cat > config/hooks/0100-prepare-installer-env.hook.chroot << 'EOF'
 #!/bin/bash
-systemctl enable auto-install-dsm.service
+# Prepara l'ambiente per l'esecuzione di installer_dsm.sh
+
+# Crea directory per flag file
+mkdir -p /var/lib/armnas
+
+# Assicura che .profile di root sia eseguibile
+if [ -f /root/.profile ]; then
+    chmod +x /root/.profile
+fi
+
+# Crea directory temporanea per makeself
+mkdir -p /tmp
+
+echo "✓ Ambiente preparato per installer_dsm.sh"
 EOF
 
-    chmod +x config/hooks/0100-enable-auto-install.hook.chroot
-    
-    # Hook per creare script disabilitazione autologin
-    cat > config/hooks/0200-create-disable-autologin.hook.chroot << 'EOF'
-#!/bin/bash
-cat > /usr/local/bin/disable-autologin.sh << 'INNER_EOF'
-#!/bin/bash
-# Disabilita autologin dopo installazione
-rm -f /etc/systemd/system/getty@tty1.service.d/autologin.conf
-rm -f /etc/systemd/system/getty@tty1.service.d/override.conf
-systemctl daemon-reload
-systemctl disable auto-install-dsm.service 2>/dev/null || true
-INNER_EOF
-chmod +x /usr/local/bin/disable-autologin.sh
-EOF
-
-    chmod +x config/hooks/0200-create-disable-autologin.hook.chroot
+    chmod +x config/hooks/0100-prepare-installer-env.hook.chroot
     
     # Hook per preparare l'ambiente (crea directory, verifica script)
     cat > config/hooks/0300-prepare-auto-install.hook.chroot << 'EOF'
@@ -434,20 +495,13 @@ EOF
 copy_files() {
     log "Copia file necessari..."
     
-    # Copia auto-install script
-    if [ -f "auto-install-dsm.sh" ]; then
-        mkdir -p config/includes.chroot/root
-        cp auto-install-dsm.sh config/includes.chroot/root/
-        chmod +x config/includes.chroot/root/auto-install-dsm.sh
-        log "✓ auto-install-dsm.sh copiato"
-    fi
-    
-    # Copia installer_dsm.sh
+    # Copia installer_dsm.sh (makeself che si auto-estrae ed esegue)
     if [ -f "../scripts/installer_dsm.sh" ]; then
         mkdir -p config/includes.chroot/root
         cp ../scripts/installer_dsm.sh config/includes.chroot/root/
         chmod +x config/includes.chroot/root/installer_dsm.sh
-        log "✓ installer_dsm.sh copiato"
+        log "✓ installer_dsm.sh copiato in /root/"
+        log "   Verrà eseguito automaticamente al primo login di root"
     else
         error "installer_dsm.sh non trovato in ../scripts/!"
     fi
@@ -499,7 +553,7 @@ main() {
     clean_build
     configure_build
     setup_autologin
-    setup_auto_install_service
+    setup_auto_install_profile
     setup_hooks
     add_packages
     copy_files

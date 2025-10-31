@@ -1,0 +1,164 @@
+# zram configuration for ARM NAS
+# Riferimento: https://github.com/ecdye/zram-config
+#
+# Formato: tipo	alg	mem_limit	disk_size	[opzioni specifiche tipo]
+#
+# Algoritmi disponibili (ordinati per velocità):
+#   lzo-rle - Più veloce, compressione decente (RACCOMANDATO per swap)
+#   lzo     - Veloce, simile a lzo-rle
+#   lz4     - Molto veloce, compressione leggermente inferiore
+#   zstd    - Più lento, miglior compressione (OTTIMO per testo/log)
+#
+# mem_limit: Limite RAM compressa (hard limit del kernel)
+# disk_size: Dimensione massima non compressa (~150-300% di mem_limit)
+#
+# IMPORTANTE per ARM NAS:
+#   - /storage NON deve essere in zram (serve per pool ZFS)
+#   - /opt/armnas NON deve essere in zram (serve per software NAS)
+#   - Solo swap e /var/log in zram per ridurre usura SD
+
+# ========================================================================
+# SWAP: Dispositivo swap in RAM compressa
+# ========================================================================
+# Parametri swap:
+#   swap	alg	mem_limit	disk_size	swap_priority	page-cluster	swappiness
+#
+# swap_priority: Priorità swap (0-32767, più alto = più priorità)
+#                75 = priorità alta (usa zram prima di swap su disco)
+# page-cluster:  Tuning per cache pagine (0-31)
+#                0 = pagine singole (bassa latenza, ottimo per zram)
+#                3 = default Linux (8 pagine, ottimizzato per HDD)
+# swappiness:    Aggressività swap (0-200)
+#                60 = default Linux
+#                150 = usa zram più aggressivamente (migliori performance)
+#                200 = massimo (utile in situazioni di alta pressione memoria)
+#
+# Configurazione:
+#   1GB RAM compressa -> max 3GB non compressi
+#   Ratio compressione tipico: 2.5:1 - 3:1 per dati misti
+swap	lzo-rle		1G		3G		75		0		150
+
+# ========================================================================
+# LOG: Directory /var/log in RAM compressa con rotation automatica
+# ========================================================================
+# Parametri log:
+#   log	alg	mem_limit	disk_size	target_dir	oldlog_dir
+#
+# target_dir:  Directory da montare in zram (/var/log)
+# oldlog_dir:  Directory per log rotation (log vecchi salvati qui)
+#              DEVE essere fuori da zram! (es. /opt/zram/oldlog su SD)
+#
+# Comportamento:
+#   - Log correnti: scritti in zram (RAM compressa) -> nessuna scrittura SD
+#   - Log rotati: spostati automaticamente in oldlog_dir (SD card)
+#   - Benefici: riduce scritture SD, mantiene log importanti
+#
+# Configurazione:
+#   150MB RAM compressa -> max 450MB non compressi
+#   Con zstd e testo, ratio compressione: 4:1 - 5:1
+#   150MB RAM può contenere ~600-750MB di log testuali
+log	lzo-rle		150M		450M		/var/log	/opt/zram/oldlog
+
+# ========================================================================
+# DIRECTORY: Altri esempi (commentati di default)
+# ========================================================================
+# Parametri dir:
+#   dir	alg	mem_limit	disk_size	target_dir
+#
+# Esempi di directory che potresti voler mettere in zram:
+
+# /tmp in zram (NON NECESSARIO - già tmpfs di default in Linux)
+# Sconsigliato perché /tmp è già in RAM tramite tmpfs
+#dir	lzo-rle		100M		300M		/tmp
+
+# /var/cache in zram (cache pacchetti apt, ecc.)
+# Utile per ridurre scritture durante apt-get install/update
+#dir	zstd		200M		600M		/var/cache
+
+# /var/tmp in zram
+# File temporanei che devono persistere tra riavvii
+#dir	lzo-rle		50M		150M		/var/tmp
+
+# ========================================================================
+# DIRECTORY DA NON METTERE IN ZRAM (per ARM NAS)
+# ========================================================================
+# ❌ /storage - DEVE rimanere libero per pool ZFS!
+#    ZFS gestisce la propria compressione e cache
+#    Montare /storage in zram causerebbe:
+#    - Impossibilità di creare pool ZFS
+#    - Errore: "directory is already mounted"
+#    - Perdita dati al riavvio (zram non è persistente)
+#
+# NON FARE:
+# dir	lzo-rle		1G		3G		/storage  # ❌ SBAGLIATO!
+
+# ❌ /opt/armnas - Directory software ARM NAS (deve essere persistente)
+#    Contiene backend, frontend, configurazioni
+#    DEVE scrivere sulla SD permanentemente
+#
+# NON FARE:
+# dir	lzo-rle		500M		1500M		/opt/armnas  # ❌ SBAGLIATO!
+
+# ❌ /home - Directory utenti (dati persistenti)
+#    Dati utente devono essere permanenti
+#
+# NON FARE:
+# dir	lzo-rle		500M		1500M		/home  # ❌ SBAGLIATO!
+
+# ========================================================================
+# NOTE TECNICHE
+# ========================================================================
+#
+# Compressione Ratio (tipici):
+#   - Swap (dati misti):     2.5:1 - 3:1 con lzo-rle
+#   - Log (testo):           4:1 - 5:1 con zstd
+#   - Binari:                1.5:1 - 2:1
+#
+# Memoria Overhead:
+#   - zram ha ~0.1% overhead quando vuoto
+#   - Metadata: ~64 bytes per 4KB page
+#
+# Performance:
+#   - lzo-rle: ~400-500 MB/s compressione, ~800-900 MB/s decompressione
+#   - zstd:    ~200-300 MB/s compressione, ~600-800 MB/s decompressione
+#   - SD card: ~20-40 MB/s scrittura (10-25x più lenta di zram!)
+#
+# Dimensionamento:
+#   mem_limit: RAM che zram può effettivamente usare (hard limit kernel)
+#   disk_size: Spazio logico presentato al sistema operativo
+#              Deve essere > mem_limit * compression_ratio
+#              Troppo alto: spreco overhead
+#              Troppo basso: zram si riempie troppo presto
+#
+# Swap Priority:
+#   75 = priorità alta (kernel usa zram prima di swap su disco)
+#   Valori tipici:
+#   - zram: 50-100
+#   - SSD: 10-50
+#   - SD/HDD: -2 to 10
+#
+# Swappiness:
+#   Controlla quando il kernel inizia a swappare
+#   Default Linux: 60
+#   Per zram: 150-200 (performance migliori, zram è veloce)
+#   Per SD senza zram: 10-20 (evita usura)
+#
+# Modifica Configurazione:
+#   1. sudo systemctl stop zram-config
+#   2. sudo nano /etc/ztab
+#   3. sudo systemctl start zram-config
+#   4. zramctl  # Verifica
+#
+# Verifica Stato:
+#   zramctl                  # Mostra tutti i device zram
+#   swapon --show            # Mostra swap (incluso zram)
+#   df -h                    # Mostra filesystem (incluso zram)
+#   free -h                  # Mostra memoria e swap totali
+#
+# Statistiche Dettagliate:
+#   cat /sys/block/zram0/mm_stat        # Statistiche compressione swap
+#   cat /sys/block/zram1/mm_stat        # Statistiche compressione log
+#   cat /sys/block/zram0/io_stat        # Statistiche I/O
+#
+# ========================================================================
+
