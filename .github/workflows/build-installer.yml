@@ -1,4 +1,4 @@
-name: Build Installer with Makeself
+name: Build Installer and ISO
 
 on:
   push:
@@ -256,24 +256,103 @@ jobs:
           scripts/installer_dsm.sh
         retention-days: 90
         
-    - name: Create GitHub Release
-      if: startsWith(github.ref, 'refs/tags/v')
+    - name: Build ISO
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        
+        echo "🔨 Preparazione build ISO..."
+        
+        # Installa dipendenze per live-build
+        sudo apt-get update
+        sudo apt-get install -y live-build live-boot live-config debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux
+        
+        # Assicurati che installer_dsm.sh sia nella posizione corretta per build.sh
+        # build.sh si aspetta ../scripts/installer_dsm.sh (rispetto a live-build/)
+        if [ ! -f "scripts/installer_dsm.sh" ]; then
+          echo "📋 Copio installer generato nella posizione corretta..."
+          cp "scripts/installer_dsm_v${VERSION}.sh" "scripts/installer_dsm.sh" || {
+            echo "❌ Errore: impossibile copiare installer"
+            exit 1
+          }
+          echo "✓ installer_dsm.sh copiato da installer_dsm_v${VERSION}.sh"
+        fi
+        
+        # Verifica che installer_dsm.sh sia un file makeself valido
+        if file "scripts/installer_dsm.sh" | grep -q "Makeself"; then
+          echo "✓ installer_dsm.sh verificato (makeself)"
+        else
+          echo "⚠️ installer_dsm.sh potrebbe non essere un file makeself valido"
+          file "scripts/installer_dsm.sh" || true
+        fi
+        
+        # Vai nella directory live-build
+        cd live-build
+        
+        # Esegui build.sh (deve essere eseguito come root)
+        echo "🚀 Avvio build ISO (questo richiederà 30-60 minuti)..."
+        echo "⚠️ Assicurati di avere almeno 15GB di spazio disponibile"
+        sudo bash build.sh
+        
+        # Verifica che l'ISO sia stata creata
+        ISO_FILE=""
+        for iso in binary-hybrid.iso binary.iso *.iso; do
+          if [ -f "$iso" ]; then
+            ISO_FILE="$iso"
+            break
+          fi
+        done
+        
+        if [ -z "$ISO_FILE" ]; then
+          echo "⚠️ ISO non trovata nella directory corrente"
+          echo "Cerca ISO in tutte le directory:"
+          find . -name "*.iso" -type f 2>/dev/null | head -5
+        else
+          ISO_SIZE=$(du -h "$ISO_FILE" | cut -f1)
+          echo "✓ ISO creata: $ISO_FILE ($ISO_SIZE)"
+          ls -lh "$ISO_FILE"
+        fi
+        
+    - name: Upload ISO as artifact
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: iso-v${{ steps.version.outputs.version }}
+        path: |
+          live-build/binary-hybrid.iso
+          live-build/binary.iso
+          live-build/*.iso
+        if-no-files-found: warn
+        retention-days: 90
+        
+    - name: Create GitHub Release with ISO
+      if: startsWith(github.ref, 'refs/tags/v') && success()
       uses: softprops/action-gh-release@v1
       with:
         files: |
           scripts/installer_dsm_v${{ steps.version.outputs.version }}.sh
+          live-build/binary-hybrid.iso
+          live-build/binary.iso
+          live-build/*.iso
         name: Release v${{ steps.version.outputs.version }}
         body: |
           ## VirtualDSM Installer v${{ steps.version.outputs.version }}
           
           ### Download
           - **installer_dsm_v${{ steps.version.outputs.version }}.sh** - Installer completo
+          - **ISO Image** - Immagine ISO Debian Live con auto-installer
           
           ### Installazione
+          
+          #### Opzione 1: Usa l'installer diretto
           ```bash
           chmod +x installer_dsm_v${{ steps.version.outputs.version }}.sh
           sudo ./installer_dsm_v${{ steps.version.outputs.version }}.sh
           ```
+          
+          #### Opzione 2: Usa l'ISO
+          1. Scrivi l'ISO su USB: `sudo dd if=*.iso of=/dev/sdX bs=4M status=progress`
+          2. Boot da USB
+          3. L'installer si avvierà automaticamente al primo boot
           
           ### Build Info
           - **Versione:** ${{ steps.version.outputs.version }}
@@ -287,13 +366,16 @@ jobs:
     - name: Summary
       run: |
         VERSION="${{ steps.version.outputs.version }}"
-        echo "## 📦 Installer Build Completato" >> $GITHUB_STEP_SUMMARY
+        echo "## 📦 Build Completato" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Versione:** \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**File creati:**" >> $GITHUB_STEP_SUMMARY
+        echo "### 📥 Artifacts Disponibili:" >> $GITHUB_STEP_SUMMARY
+        echo "- \`installer-dsm-v${VERSION}\` - Installer makeself" >> $GITHUB_STEP_SUMMARY
+        echo "- \`iso-v${VERSION}\` - Immagine ISO Debian Live" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 File:" >> $GITHUB_STEP_SUMMARY
         echo "- \`installer_dsm_v${VERSION}.sh\`" >> $GITHUB_STEP_SUMMARY
         echo "- \`installer_dsm.sh\` (alias)" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "📥 Scarica l'artifact \`installer-dsm-v${VERSION}\` per ottenere i file." >> $GITHUB_STEP_SUMMARY
+        echo "- \`*.iso\` (Immagine ISO)" >> $GITHUB_STEP_SUMMARY
 
