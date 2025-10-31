@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""
+Script di debug per verificare gli utenti nel database ArmNAS
+"""
+
+import sys
+import os
+from pathlib import Path
+
+# Aggiungi il percorso del backend al PYTHONPATH
+backend_path = Path(__file__).parent
+sys.path.insert(0, str(backend_path))
+
+try:
+    from api.database import get_db, User
+    from sqlalchemy.orm import Session
+    
+    def debug_users():
+        """Debug degli utenti nel database"""
+        print("🔍 Debug Utenti ArmNAS")
+        print("=" * 40)
+        
+        # Ottieni una sessione del database
+        db_gen = get_db()
+        db: Session = next(db_gen)
+        
+        try:
+            # Ottieni tutti gli utenti
+            users = db.query(User).all()
+            
+            if not users:
+                print("❌ Nessun utente trovato nel database!")
+                return
+            
+            print(f"✅ Trovati {len(users)} utenti:")
+            print()
+            
+            for i, user in enumerate(users, 1):
+                print(f"{i}. Utente: {user.username}")
+                print(f"   - ID: {user.id}")
+                print(f"   - Admin: {'✅ SÌ' if user.is_admin else '❌ NO'}")
+                print(f"   - Password hash: {user.password_hash[:20]}..." if user.password_hash else "   - Password hash: None")
+                print()
+            
+            # Verifica se c'è almeno un admin
+            admin_users = [u for u in users if u.is_admin]
+            if admin_users:
+                print(f"✅ Trovati {len(admin_users)} amministratori")
+                for admin in admin_users:
+                    print(f"   - {admin.username}")
+            else:
+                print("⚠️  ATTENZIONE: Nessun amministratore trovato!")
+                print("   Questo potrebbe spiegare perché la voce 'Aggiornamenti' non appare.")
+                
+                # Suggerisci come creare un admin
+                print("\n💡 Per creare un amministratore:")
+                print("   1. Accedi al database SQLite:")
+                print("      sqlite3 armnas.db")
+                print("   2. Aggiorna un utente esistente:")
+                print("      UPDATE users SET is_admin = 1 WHERE username = 'nome_utente';")
+                print("   3. Oppure crea un nuovo admin con lo script di setup")
+        
+        except Exception as e:
+            print(f"❌ Errore nell'accesso al database: {e}")
+            print(f"   Percorso database: {backend_path / 'armnas.db'}")
+            
+            # Verifica se il file database esiste
+            db_file = backend_path / 'armnas.db'
+            if db_file.exists():
+                print(f"   ✅ File database trovato: {db_file}")
+            else:
+                print(f"   ❌ File database non trovato: {db_file}")
+        
+        finally:
+            db.close()
+    
+    if __name__ == "__main__":
+        debug_users()
+        
+except ImportError as e:
+    print(f"❌ Errore nell'importazione dei moduli: {e}")
+    print("   Assicurati di essere nella directory backend e che le dipendenze siano installate")
+    print("   Prova: pip install -r requirements.txt")

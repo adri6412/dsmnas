@@ -1,0 +1,18 @@
+services:
+  virtual-dsm:
+    container_name: virtual-dsm
+    image: vdsm/virtual-dsm
+    environment:
+      DISK_SIZE: "256G"
+    devices:
+      - /dev/kvm
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - 5000:5000
+    volumes:
+      - /storage:/storage
+    restart: always
+    stop_grace_period: 2m
+

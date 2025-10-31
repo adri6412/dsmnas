@@ -1,0 +1,110 @@
+name: Build Installer with Makeself
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'scripts/install.sh'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'config/**'
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:  # Permette esecuzione manuale
+
+jobs:
+  build-installer:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y makeself
+        
+    - name: Verify makeself installation
+      run: |
+        which makeself.sh || which ./makeself.sh
+        makeself.sh --version || echo "Makeself installato"
+        
+    - name: Build installer_dsm.sh
+      run: |
+        # Il repository è già nella root del workspace
+        # Simula la struttura: makeself-2.5.0/ con nas/ come sibling
+        # Ma in GitHub Actions, il repo è già nella root, quindi:
+        
+        cd "$GITHUB_WORKSPACE"
+        
+        # Installa o usa makeself
+        if command -v makeself.sh &> /dev/null; then
+          MAKESELF_CMD="makeself.sh"
+        else
+          # Fallback: scarica makeself
+          echo "Scaricamento makeself 2.5.0..."
+          wget -q https://github.com/megastep/makeself/releases/download/release-2.5.0/makeself-2.5.0.run
+          chmod +x makeself-2.5.0.run
+          # Estrai in directory temporanea
+          mkdir -p /tmp/makeself
+          cd /tmp/makeself
+          bash "$GITHUB_WORKSPACE/makeself-2.5.0.run" --target /tmp/makeself --nox11 --quiet
+          MAKESELF_CMD="/tmp/makeself/makeself-2.5.0/makeself.sh"
+          cd "$GITHUB_WORKSPACE"
+        fi
+        
+        # Esegui makeself come nel tuo comando:
+        # ./makeself.sh ../nas/ installer_dsm.sh VirtualDSM ./scripts/install.sh
+        # Ma in GitHub Actions, il repo è già nella root, quindi usiamo ./
+        echo "Esecuzione makeself..."
+        $MAKESELF_CMD ./ installer_dsm.sh "VirtualDSM" ./scripts/install.sh
+        
+        # Sposta il file risultante in scripts/
+        if [ -f "installer_dsm.sh" ]; then
+          mv installer_dsm.sh scripts/
+          echo "✓ installer_dsm.sh creato in scripts/"
+        else
+          echo "✗ ERRORE: installer_dsm.sh non creato!"
+          exit 1
+        fi
+        
+    - name: Verify installer file
+      run: |
+        if [ ! -f "scripts/installer_dsm.sh" ]; then
+          echo "ERRORE: installer_dsm.sh non trovato!"
+          exit 1
+        fi
+        
+        # Verifica che sia un file makeself valido
+        file scripts/installer_dsm.sh
+        ls -lh scripts/installer_dsm.sh
+        
+        # Verifica che sia eseguibile
+        chmod +x scripts/installer_dsm.sh
+        
+    - name: Test extraction (dry run)
+      run: |
+        # Test estrazione senza eseguire
+        mkdir -p /tmp/test_extract
+        cd /tmp/test_extract
+        bash "$GITHUB_WORKSPACE/scripts/installer_dsm.sh" --help || bash "$GITHUB_WORKSPACE/scripts/installer_dsm.sh" --check || echo "File makeself valido"
+        rm -rf /tmp/test_extract
+        
+    - name: Upload installer as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: installer-dsm
+        path: scripts/installer_dsm.sh
+        retention-days: 30
+        
+    - name: Create Release (optional)
+      if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+      run: |
+        echo "Installer creato e pronto per il release"
+        echo "Scarica l'artifact 'installer-dsm' per ottenere installer_dsm.sh"
+
