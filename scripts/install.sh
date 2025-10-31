@@ -451,61 +451,83 @@ fi
 if [ "$OVERLAYROOT_INSTALLED" = "true" ] && command -v overlayroot-chroot &> /dev/null; then
     info "Configurazione overlayroot con tmpfs..."
     # Configura overlayroot per usare tmpfs (RAM)
+    # IMPORTANTE: /storage deve essere escluso dall'overlay per permettere a ZFS di funzionare
+    # overlayroot non supporta direttamente exclude, quindi useremo bind mount dopo
     cat > /etc/overlayroot.conf << 'OVERLAYROOTEOF'
 overlayroot="tmpfs:swap=1,recurse=0"
 OVERLAYROOTEOF
     
+    # Crea anche un file per escludere directory specifiche (se supportato)
+    # Nota: overlayroot non supporta nativamente exclude, quindi usiamo bind mount
+    info "Configurazione esclusioni overlayroot (via bind mount)..."
+    
     info "Overlayroot configurato. Il sistema userà tmpfs per le scritture."
     
-    # Crea script per escludere /opt/armnas dall'overlay usando bind mount
+    # Crea script per escludere /opt/armnas e /storage dall'overlay usando bind mount
     # Questo script viene eseguito dopo che overlayroot è attivo
-    info "Configurazione bind mount per /opt/armnas (escluso dall'overlay)..."
+    info "Configurazione bind mount per /opt/armnas e /storage (esclusi dall'overlay)..."
     cat > /usr/local/bin/bind-armnas.sh << 'BINDEOF'
 #!/bin/bash
-# Script per montare /opt/armnas dalla SD originale, escludendolo dall'overlay
-# Questo permette al software di scrivere permanentemente sulla SD
+# Script per montare /opt/armnas e /storage dalla SD originale, escludendoli dall'overlay
+# Questo permette al software e a ZFS di scrivere permanentemente sulla SD
 
 set -e
 
-# La directory /opt/armnas deve essere montata dalla SD originale
 # overlayroot crea un mount point per il lower filesystem in /media/root-ro
 LOWER_ROOT="/media/root-ro"
-ARMNAS_DIR="/opt/armnas"
 
-# Verifica che il lower root esista (overlayroot attivo)
-if [ -d "$LOWER_ROOT" ]; then
+# Funzione per montare una directory dalla SD originale
+mount_from_sd() {
+    local TARGET_DIR="$1"
+    local LOWER_DIR="$LOWER_ROOT$TARGET_DIR"
+    
+    # Verifica che il lower root esista (overlayroot attivo)
+    if [ ! -d "$LOWER_ROOT" ]; then
+        echo "⚠️ Overlayroot non attivo (lower root non trovato)"
+        return 0
+    fi
+    
     # Crea la directory nell'overlay se non esiste
-    if [ ! -d "$ARMNAS_DIR" ]; then
-        mkdir -p "$ARMNAS_DIR"
+    if [ ! -d "$TARGET_DIR" ]; then
+        mkdir -p "$TARGET_DIR"
     fi
     
     # Se non è già montato, monta la directory dalla SD originale
-    if ! mountpoint -q "$ARMNAS_DIR"; then
-        LOWER_ARMNAS="$LOWER_ROOT/opt/armnas"
-        
-        # Se la directory esiste nella SD originale, montala
-        if [ -d "$LOWER_ARMNAS" ]; then
-            mount --bind "$LOWER_ARMNAS" "$ARMNAS_DIR"
-            echo "Montato $LOWER_ARMNAS su $ARMNAS_DIR"
-        else
-            # Se non esiste, creala sulla SD originale
-            # Prima smontiamo l'overlay temporaneamente
-            mkdir -p "$LOWER_ARMNAS"
-            mount --bind "$LOWER_ARMNAS" "$ARMNAS_DIR"
-            echo "Creato e montato $LOWER_ARMNAS su $ARMNAS_DIR"
+    if ! mountpoint -q "$TARGET_DIR"; then
+        # Crea la directory nella SD originale se non esiste
+        if [ ! -d "$LOWER_DIR" ]; then
+            mkdir -p "$LOWER_DIR"
         fi
+        
+        # Monta dalla SD originale
+        mount --bind "$LOWER_DIR" "$TARGET_DIR"
+        echo "✓ Montato $LOWER_DIR su $TARGET_DIR (escluso dall'overlay)"
+    else
+        echo "✓ $TARGET_DIR già montato"
     fi
-fi
+}
+
+# Monta /opt/armnas (escluso dall'overlay)
+mount_from_sd "/opt/armnas"
+
+# Monta /storage (escluso dall'overlay per permettere a ZFS di funzionare correttamente)
+# /storage è dove vengono montati i pool ZFS, quindi deve essere sul filesystem reale
+mount_from_sd "/storage"
+
+echo "✓ Directory persistenti configurate"
 BINDEOF
 
     chmod +x /usr/local/bin/bind-armnas.sh
     
     # Crea servizio systemd per eseguire lo script dopo overlayroot
+    # IMPORTANTE: Questo servizio deve essere eseguito PRIMA di ZFS per permettere
+    # a ZFS di montare correttamente i pool su /storage
     cat > /etc/systemd/system/bind-armnas.service << 'SERVICEEOF'
 [Unit]
-Description=Bind mount /opt/armnas from SD (exclude from overlay)
+Description=Bind mount /opt/armnas and /storage from SD (exclude from overlay)
 After=local-fs.target overlayroot.service
-Before=armnas-backend.service
+Before=zfs-mount.service zfs-import-cache.service armnas-backend.service
+Wants=overlayroot.service
 
 [Service]
 Type=oneshot
@@ -520,7 +542,8 @@ SERVICEEOF
 
     systemctl enable bind-armnas.service
     
-    info "/opt/armnas sarà escluso dall'overlay e scriverà direttamente sulla SD."
+    info "/opt/armnas e /storage saranno esclusi dall'overlay e scriveranno direttamente sulla SD."
+    info "Questo è necessario per permettere a ZFS di montare correttamente i pool su /storage."
 else
     # Metodo alternativo: configura overlayfs manualmente via fstab
     warn "overlayroot non disponibile, configurando overlayfs manualmente..."
