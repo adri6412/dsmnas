@@ -449,6 +449,16 @@ run_build() {
     log "Assicurati di avere almeno 15GB di spazio libero"
     log ""
     
+    # Esporta variabili d'ambiente per build non-interattiva
+    export DEBIAN_FRONTEND=noninteractive
+    export DEBIAN_PRIORITY=critical
+    export DEBCONF_NONINTERACTIVE_SEEN=true
+    export DEBCONF_NOWARNINGS=true
+    export UCF_FORCE_CONFFNEW=1
+    export UCF_FORCE_CONFFOLD=0
+    export APT_LISTCHANGES_FRONTEND=none
+    export DEBOOTSTRAP_OPTS="${DEBOOTSTRAP_OPTS}"
+    
     lb build 2>&1 | tee -a build.log
     
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
