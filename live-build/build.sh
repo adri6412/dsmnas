@@ -164,25 +164,77 @@ setup_hooks() {
     
     mkdir -p config/hooks/
     
-    # Hook per applicare preferenze APT ed escludere ubuntu-keyring
+    # Hook per creare pacchetto fittizio ubuntu-keyring usando dpkg
     # Questo hook deve essere il PRIMO (0050) per essere eseguito prima dell'installazione pacchetti
     cat > config/hooks/0050-exclude-ubuntu-packages.hook.chroot << 'EOF'
 #!/bin/bash
-# Assicura che ubuntu-keyring sia escluso PRIMA dell'installazione pacchetti
+# Crea pacchetto fittizio ubuntu-keyring per soddisfare dipendenze
+# Questo viene eseguito PRIMA dell'installazione dei pacchetti
 set -e
 
-# Verifica che il file di preferenze sia presente
-if [ ! -f /etc/apt/preferences.d/99-exclude-ubuntu-packages ]; then
-    mkdir -p /etc/apt/preferences.d
-    cat > /etc/apt/preferences.d/99-exclude-ubuntu-packages << 'PREFEOF'
+# Crea directory temporanea per il pacchetto fittizio
+TMPDIR=$(mktemp -d)
+cd "$TMPDIR"
+
+# Crea struttura pacchetto .deb fittizio
+mkdir -p ubuntu-keyring/DEBIAN
+
+# Crea file di controllo per il pacchetto fittizio
+cat > ubuntu-keyring/DEBIAN/control << 'CONTROL'
+Package: ubuntu-keyring
+Version: 2012.05.19-1
+Architecture: all
+Maintainer: ArmNAS Dummy Package <noreply@armnas.local>
+Description: Dummy ubuntu-keyring package for Debian
+ This is a dummy package to satisfy dependencies requiring ubuntu-keyring
+ on Debian systems. The package provides no files.
+Priority: optional
+Section: misc
+CONTROL
+
+# Crea un file vuoto per evitare errori
+mkdir -p ubuntu-keyring/usr/share/doc/ubuntu-keyring
+touch ubuntu-keyring/usr/share/doc/ubuntu-keyring/copyright
+
+# Costruisci il pacchetto .deb
+dpkg-deb --build ubuntu-keyring 2>/dev/null || {
+    # Fallback: crea pacchetto più semplice
+    echo "Package: ubuntu-keyring" > ubuntu-keyring/DEBIAN/control
+    echo "Version: 1.0" >> ubuntu-keyring/DEBIAN/control
+    echo "Architecture: all" >> ubuntu-keyring/DEBIAN/control
+    echo "Description: Dummy package" >> ubuntu-keyring/DEBIAN/control
+    dpkg-deb --build -Z none ubuntu-keyring 2>/dev/null || true
+}
+
+# Installa il pacchetto fittizio usando --force-depends
+if [ -f ubuntu-keyring*.deb ]; then
+    dpkg --force-depends -i ubuntu-keyring*.deb 2>/dev/null || \
+    dpkg --force-all -i ubuntu-keyring*.deb 2>/dev/null || \
+    apt-get install -y --allow-unauthenticated --allow-downgrades ./ubuntu-keyring*.deb 2>/dev/null || true
+fi
+
+# Crea anche file di preferenze APT come backup
+mkdir -p /etc/apt/preferences.d
+cat > /etc/apt/preferences.d/99-exclude-ubuntu-packages << 'PREFEOF'
 Package: ubuntu-keyring
 Pin: release *
 Pin-Priority: -1
 PREFEOF
-fi
 
-# Aggiorna cache APT dopo aver impostato le preferenze
+# Configura APT per gestire meglio le dipendenze
+mkdir -p /etc/apt/apt.conf.d
+cat > /etc/apt/apt.conf.d/99-armnas-deps << 'APTCONF'
+APT::Get::Fix-Broken "true";
+APT::Get::AllowUnauthenticated "false";
+APTCONF
+
+# Pulizia
+cd /
+rm -rf "$TMPDIR"
+
+# Aggiorna cache APT e risolvi dipendenze
 apt-get update || true
+apt-get install -f -y --allow-unauthenticated 2>/dev/null || true
 EOF
 
     chmod +x config/hooks/0050-exclude-ubuntu-packages.hook.chroot
