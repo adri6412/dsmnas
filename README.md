@@ -151,9 +151,13 @@ Consulta la documentazione completa in `docs/`:
 
 ## 🙏 Attribuzioni
 
-Questo progetto utilizza le seguenti tecnologie e progetti open-source:
+Questo progetto utilizza numerose tecnologie e progetti open-source. Per un elenco completo delle dipendenze, delle loro licenze e attribuzioni, consulta il file [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
 
+**Progetti principali:**
 - **[Virtual DSM](https://github.com/vdsm/virtual-dsm)** - Virtual DSM in a Docker container. Sviluppato e mantenuto da [vdsm/virtual-dsm](https://github.com/vdsm/virtual-dsm). Licenza MIT.
+- **FastAPI** - Framework web per API Python
+- **Vue.js** - Framework JavaScript progressivo
+- E molte altre dipendenze elencate in [ATTRIBUTIONS.md](ATTRIBUTIONS.md)
 
 ## ⚖️ Disclaimer
 
