@@ -10,6 +10,7 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'config/**'
+      - 'live-build/**'
     tags:
       - 'v*'  # Trigger su tag versioni (es: v1.0.0)
   pull_request:
