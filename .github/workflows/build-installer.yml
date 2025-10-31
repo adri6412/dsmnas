@@ -265,7 +265,7 @@ jobs:
         
         # Installa dipendenze base necessarie
         sudo apt-get update
-        sudo apt-get install -y wget curl dpkg-dev debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux
+        sudo apt-get install -y wget curl dpkg-dev xz-utils gzip debian-keyring debootstrap make grub-pc-bin grub-efi-amd64-bin dosfstools mtools syslinux isolinux
         
         # Scarica manualmente i pacchetti live-build da Debian per evitare problemi con ubuntu-keyring
         echo "📦 Download manuale pacchetti live-build da Debian..."
@@ -278,24 +278,21 @@ jobs:
         for pkg in live-build live-boot live-config; do
           # Scarica l'indice Packages e cerca il pacchetto
           echo "Scaricando informazioni per ${pkg}..."
-          wget -q -O - "${DEBIAN_MIRROR}/dists/bookworm/main/binary-amd64/Packages.xz" 2>/dev/null | xzcat 2>/dev/null | \
-            grep -A 30 "^Package: ${pkg}$" | grep "^Filename:" | head -1 | cut -d' ' -f2 | \
-            while read filename; do
-              if [ -n "$filename" ]; then
-                echo "Trovato: ${filename}"
-                wget -q "${DEBIAN_MIRROR}/${filename}" -O "${pkg}.deb" && echo "✓ ${pkg} scaricato" || echo "✗ Errore download ${pkg}"
-              fi
-            done
+          filename=$(wget -q -O - "${DEBIAN_MIRROR}/dists/bookworm/main/binary-amd64/Packages.xz" 2>/dev/null | xzcat 2>/dev/null | \
+            grep -A 30 "^Package: ${pkg}$" | grep "^Filename:" | head -1 | cut -d' ' -f2)
           
           # Se non trovato con xz, prova con gz
-          if [ ! -f "${pkg}.deb" ]; then
-            wget -q -O - "${DEBIAN_MIRROR}/dists/bookworm/main/binary-amd64/Packages.gz" 2>/dev/null | zcat 2>/dev/null | \
-              grep -A 30 "^Package: ${pkg}$" | grep "^Filename:" | head -1 | cut -d' ' -f2 | \
-              while read filename; do
-                if [ -n "$filename" ]; then
-                  wget -q "${DEBIAN_MIRROR}/${filename}" -O "${pkg}.deb" && echo "✓ ${pkg} scaricato" || true
-                fi
-              done
+          if [ -z "$filename" ]; then
+            filename=$(wget -q -O - "${DEBIAN_MIRROR}/dists/bookworm/main/binary-amd64/Packages.gz" 2>/dev/null | zcat 2>/dev/null | \
+              grep -A 30 "^Package: ${pkg}$" | grep "^Filename:" | head -1 | cut -d' ' -f2)
+          fi
+          
+          # Se trovato, scarica il pacchetto
+          if [ -n "$filename" ]; then
+            echo "Trovato: ${filename}"
+            wget -q "${DEBIAN_MIRROR}/${filename}" -O "${pkg}.deb" && echo "✓ ${pkg} scaricato" || echo "✗ Errore download ${pkg}"
+          else
+            echo "⚠️ ${pkg} non trovato nell'indice Packages"
           fi
         done
         
