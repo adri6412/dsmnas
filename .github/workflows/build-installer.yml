@@ -281,15 +281,13 @@ jobs:
         }
         
         # Priorità: preferisci Debian per live-build, ma permetti Ubuntu per altre dipendenze
-        sudo tee /etc/apt/preferences.d/debian-priority << 'EOF'
-Package: *
-Pin: release o=Debian,n=bookworm
-Pin-Priority: 500
-
-Package: live-build live-boot live-config
-Pin: release o=Debian,n=bookworm
-Pin-Priority: 1000
-EOF
+        echo "Package: *" | sudo tee /etc/apt/preferences.d/debian-priority
+        echo "Pin: release o=Debian,n=bookworm" | sudo tee -a /etc/apt/preferences.d/debian-priority
+        echo "Pin-Priority: 500" | sudo tee -a /etc/apt/preferences.d/debian-priority
+        echo "" | sudo tee -a /etc/apt/preferences.d/debian-priority
+        echo "Package: live-build live-boot live-config" | sudo tee -a /etc/apt/preferences.d/debian-priority
+        echo "Pin: release o=Debian,n=bookworm" | sudo tee -a /etc/apt/preferences.d/debian-priority
+        echo "Pin-Priority: 1000" | sudo tee -a /etc/apt/preferences.d/debian-priority
         
         # Aggiorna cache APT
         sudo apt-get update
