@@ -275,7 +275,7 @@ jobs:
         cd "$TMPDIR"
         
         mkdir -p ubuntu-keyring/DEBIAN
-        cat > ubuntu-keyring/DEBIAN/control << 'CONTROL'
+        cat > ubuntu-keyring/DEBIAN/control <<EOF
 Package: ubuntu-keyring
 Version: 2012.05.19-1
 Architecture: all
@@ -285,7 +285,7 @@ Description: Dummy ubuntu-keyring package for Debian builds
  when building Debian images on Ubuntu runners.
 Priority: optional
 Section: misc
-CONTROL
+EOF
         
         mkdir -p ubuntu-keyring/usr/share/doc/ubuntu-keyring
         touch ubuntu-keyring/usr/share/doc/ubuntu-keyring/copyright
