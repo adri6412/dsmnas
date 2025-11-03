@@ -146,21 +146,21 @@ swap-priority = 100
 [zram1]
 zram-size = ${LOG_SIZE}
 compression-algorithm = zstd
-filesystem = ext4
+fs-type = ext4
 mount-point = /var/log
 
 # /tmp in RAM compressa
 [zram2]
 zram-size = ${TMP_SIZE}
 compression-algorithm = zstd
-filesystem = ext4
+fs-type = ext4
 mount-point = /tmp
 
 # /var/cache in RAM compressa (per apt e altri cache)
 [zram3]
 zram-size = ${CACHE_SIZE}
 compression-algorithm = zstd
-filesystem = ext4
+fs-type = ext4
 mount-point = /var/cache
 EOF
 
