@@ -331,7 +331,7 @@ export default {
         })
         
         if (response.data.note) {
-          toast.warning(response.data.note, {
+          toast.info(response.data.note, {
             duration: 0,  // Rimane fino a chiusura manuale
             position: 'top'
           })
@@ -344,29 +344,43 @@ export default {
         }
         
         // Avvia polling per verificare quando l'installazione è completata
-        let reconnectAttempts = 0
-        const maxAttempts = 40  // 40 tentativi = ~2 minuti
+        let pollAttempts = 0
+        const maxAttempts = 50  // 50 tentativi = ~2.5 minuti
         
-        const checkConnection = setInterval(async () => {
+        toast.info('⏳ Monitoraggio installazione in corso...', {
+          duration: 5000
+        })
+        
+        const checkInstallation = setInterval(async () => {
+          pollAttempts++
+          
           try {
             await axios.get('/api/updates/status', { timeout: 3000 })
-            // Se arriviamo qui, il backend è tornato online
-            clearInterval(checkConnection)
+            // Backend ancora online, installazione probabilmente completata
             
-            toast.success('🎉 Aggiornamento completato! Ricarico la pagina...', {
-              duration: 3000
-            })
-            
-            // Ricarica la pagina dopo 3 secondi
-            setTimeout(() => {
-              window.location.reload()
-            }, 3000)
+            if (pollAttempts > 10) {  // Attendi almeno 30 secondi prima di considerare completato
+              clearInterval(checkInstallation)
+              
+              toast.success('✅ Aggiornamento completato!', {
+                duration: 0,
+                position: 'top'
+              })
+              
+              if (response.data.requires_reboot) {
+                setTimeout(() => {
+                  toast.warning('🔄 Riavvia il NAS per applicare le modifiche!', {
+                    duration: 0,
+                    position: 'top'
+                  })
+                }, 1000)
+              }
+            }
             
           } catch (error) {
-            reconnectAttempts++
-            if (reconnectAttempts >= maxAttempts) {
-              clearInterval(checkConnection)
-              toast.error('Timeout: impossibile verificare lo stato. Ricarica manualmente la pagina.', {
+            // Backend offline o in riavvio
+            if (pollAttempts >= maxAttempts) {
+              clearInterval(checkInstallation)
+              toast.warning('⚠️ Installazione potrebbe essere ancora in corso. Controlla i log del sistema.', {
                 duration: 0
               })
             }

@@ -351,8 +351,9 @@ async def install_update(
             "success": True,
             "message": "Installazione avviata in background",
             "filename": request.filename,
-            "note": "L'installazione è in corso. I servizi verranno riavviati automaticamente al termine (2-5 minuti). La connessione potrebbe interrompersi brevemente.",
-            "warning": "Non chiudere questa pagina o il browser durante l'installazione."
+            "note": "L'installazione è in corso (2-5 minuti). Al termine, sarà necessario RIAVVIARE il NAS per applicare le modifiche.",
+            "warning": "Non chiudere questa pagina durante l'installazione.",
+            "requires_reboot": True
         }
         
     except Exception as e:

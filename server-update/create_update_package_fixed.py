@@ -553,40 +553,14 @@ log "🔐 Aggiornamento permessi..."
 chown -R www-data:www-data "$INSTALL_DIR" 2>/dev/null || log "⚠️  Impossibile impostare proprietario www-data"
 chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
 
-# Riavvia servizi
-log "🔄 Riavvio servizi..."
-
-# Verifica configurazione nginx prima del riavvio
+# Verifica configurazione nginx
+log "🔍 Verifica configurazione nginx..."
 if command -v nginx >/dev/null 2>&1; then
-    log "  🔍 Verifica configurazione nginx..."
-    nginx -t 2>/dev/null || log "  ⚠️  Configurazione nginx potrebbe avere problemi"
-fi
-
-if systemctl list-unit-files | grep -q "$NGINX_SERVICE"; then
-    systemctl start "$NGINX_SERVICE" || log "⚠️  Impossibile riavviare $NGINX_SERVICE"
-    
-    # Verifica che nginx sia attivo
-    sleep 2
-    if systemctl is-active --quiet "$NGINX_SERVICE"; then
-        log "✅ Nginx riavviato correttamente"
+    if nginx -t 2>/dev/null; then
+        log "  ✅ Configurazione nginx valida"
     else
-        log "⚠️  Nginx non è attivo dopo il riavvio"
+        log "  ⚠️  Configurazione nginx potrebbe avere problemi"
     fi
-fi
-
-if systemctl list-unit-files | grep -q "$SERVICE_NAME"; then
-    systemctl start "$SERVICE_NAME" || log "⚠️  Impossibile riavviare $SERVICE_NAME"
-    
-    # Verifica stato servizio
-    sleep 3
-    if systemctl is-active --quiet "$SERVICE_NAME"; then
-        log "✅ Servizio $SERVICE_NAME riavviato correttamente"
-    else
-        log "⚠️  Il servizio $SERVICE_NAME non è attivo"
-        log "🔧 Controllare i log: journalctl -u $SERVICE_NAME -f"
-    fi
-else
-    log "⚠️  Servizio $SERVICE_NAME non trovato nel sistema"
 fi
 
 # Verifica utenti admin
@@ -609,11 +583,25 @@ fi
 log "🧹 Pulizia file temporanei..."
 rm -rf "$TEMP_CONFIG_DIR"
 
-log "🎉 Aggiornamento completato!"
+echo ""
+echo "════════════════════════════════════════════════════════"
+log "✅ Aggiornamento completato con successo!"
+echo "════════════════════════════════════════════════════════"
+echo ""
 log "📍 Directory installazione: $INSTALL_DIR"
 log "💾 Backup salvato in: $AUTO_BACKUP_PATH"
-log "🔧 Per verificare lo stato: systemctl status $SERVICE_NAME"
-log "🌐 Per verificare nginx: systemctl status $NGINX_SERVICE"
+log "📦 Versione installata: $VERSION"
+echo ""
+log "⚠️  IMPORTANTE: Per applicare le modifiche, è necessario riavviare il NAS"
+echo ""
+log "🔄 Riavvia il NAS con uno di questi comandi:"
+echo "   - Dall'interfaccia web: Dashboard → Riavvia"
+echo "   - Da terminale: reboot"
+echo ""
+log "💡 Dopo il riavvio:"
+log "   - Verifica la nuova versione nella dashboard"
+log "   - Controlla che tutti i servizi siano attivi"
+echo ""
 
 exit 0
 '''
