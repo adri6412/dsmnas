@@ -12,7 +12,7 @@ from api.auth import get_current_admin, init_admin_user
 app = FastAPI(
     title="ZFS Disk Management API",
     description="API per la gestione di dischi, ZFS e Virtual DSM",
-    version="0.1.0"
+    version="0.2.1"
 )
 
 # Configurazione CORS per consentire le richieste dal frontend

@@ -1379,13 +1379,31 @@ fi
 
 info "✓ Sistema configurato per login normale (richiederà password)"
 
+# Leggi versione se disponibile
+VERSION="unknown"
+if [ -f "$INSTALL_DIR/VERSION" ]; then
+    VERSION=$(cat "$INSTALL_DIR/VERSION" 2>/dev/null | tr -d '\n\r')
+elif [ -f "$REPO_DIR/VERSION" ]; then
+    VERSION=$(cat "$REPO_DIR/VERSION" 2>/dev/null | tr -d '\n\r')
+fi
+
 # Messaggio finale
-info "Installazione completata!"
+echo ""
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║                                                            ║"
+echo "║         ✅ Installazione ArmNAS Completata! ✅             ║"
+echo "║                                                            ║"
+echo "║  Versione: v${VERSION}                                        ║"
+echo "║                                                            ║"
+echo "╚════════════════════════════════════════════════════════════╝"
+echo ""
 info "Puoi accedere all'interfaccia web di ArmNAS all'indirizzo: http://$IP_ADDRESS"
+info ""
 info "Credenziali di accesso predefinite:"
 info "  Username: admin"
 info "  Password: admin"
-warn "Si consiglia di cambiare la password predefinita dopo il primo accesso."
+echo ""
+warn "⚠️  Si consiglia di cambiare la password predefinita dopo il primo accesso."
 info "Se riscontri problemi, esegui gli script di correzione:"
 info "  sudo $INSTALL_DIR/fix_permissions.sh  # Per correggere i permessi"
 info "  sudo $INSTALL_DIR/fix_nginx.sh        # Per correggere la configurazione di Nginx"
