@@ -255,21 +255,28 @@ fi
 AUTO_INSTALL="false"
 BACKUP_PATH=""
 
+log "🔍 Argomenti ricevuti: $@"
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --auto)
             AUTO_INSTALL="true"
+            log "✅ Modalità AUTO attivata"
             shift
             ;;
         --backup)
             BACKUP_PATH="$2"
+            log "💾 Backup path personalizzato: $BACKUP_PATH"
             shift 2
             ;;
         *)
+            log "⚠️  Argomento sconosciuto ignorato: $1"
             shift
             ;;
     esac
 done
+
+log "📊 AUTO_INSTALL=$AUTO_INSTALL"
 
 # Conferma aggiornamento (se non auto)
 if [[ "$AUTO_INSTALL" != "true" ]]; then
