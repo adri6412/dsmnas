@@ -209,32 +209,24 @@
     </div>
 
     <!-- Modal Installazione -->
-    <div class="modal fade" id="installModal" tabindex="-1" ref="installModal">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header bg-warning text-dark">
-            <h5 class="modal-title">
-              <font-awesome-icon icon="exclamation-triangle" class="me-2" />
-              Conferma Installazione
-            </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <p><strong>Attenzione:</strong> L'installazione dell'aggiornamento richiederà:</p>
-            <ul>
-              <li>Backup automatico del sistema corrente</li>
-              <li>Arresto temporaneo dei servizi</li>
-              <li>Riavvio del sistema al termine</li>
-            </ul>
-            <p>Vuoi procedere con l'installazione?</p>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-            <button type="button" class="btn btn-primary" @click="confirmInstall">Procedi</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <b-modal
+      v-model="showInstallModal"
+      title="Conferma Installazione"
+      header-bg-variant="warning"
+      header-text-variant="dark"
+      @ok="confirmInstall"
+      ok-variant="primary"
+      ok-title="Procedi"
+      cancel-title="Annulla"
+    >
+      <p><strong>Attenzione:</strong> L'installazione dell'aggiornamento richiederà:</p>
+      <ul>
+        <li>Backup automatico del sistema corrente</li>
+        <li>Arresto temporaneo dei servizi</li>
+        <li>Riavvio del sistema al termine</li>
+      </ul>
+      <p>Vuoi procedere con l'installazione di <strong>{{ pendingInstallFile }}</strong>?</p>
+    </b-modal>
   </div>
 </template>
 
@@ -265,7 +257,7 @@ export default {
     
     const selectedFile = ref(null)
     const fileInput = ref(null)
-    const installModal = ref(null)
+    const showInstallModal = ref(false)
     const pendingInstallFile = ref(null)
     
     // Methods
@@ -320,19 +312,16 @@ export default {
     
     const installDownloadedUpdate = (filename) => {
       pendingInstallFile.value = filename
-      const modal = new window.bootstrap.Modal(installModal.value)
-      modal.show()
+      showInstallModal.value = true
     }
     
     const confirmInstall = async () => {
       if (!pendingInstallFile.value) return
       
       installing.value = true
+      showInstallModal.value = false
+      
       try {
-        // Chiudi il modal
-        const modal = window.bootstrap.Modal.getInstance(installModal.value)
-        if (modal) modal.hide()
-        
         const response = await axios.post('/api/updates/install', {
           filename: pendingInstallFile.value
         })
@@ -457,7 +446,8 @@ export default {
       restoring,
       selectedFile,
       fileInput,
-      installModal,
+      showInstallModal,
+      pendingInstallFile,
       handleFileSelect,
       uploadUpdate,
       installDownloadedUpdate,
