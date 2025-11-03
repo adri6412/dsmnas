@@ -326,9 +326,27 @@ export default {
           filename: pendingInstallFile.value
         })
         
-        toast.info(response.data.message || 'Installazione avviata')
-        toast.warning(response.data.note || 'Seguire le istruzioni per completare l\'installazione', {
-          duration: 10000
+        // Mostra istruzioni dettagliate
+        const instructions = response.data.instructions || []
+        const installCommand = response.data.install_command || ''
+        
+        let instructionText = '<div class="text-start"><strong>📋 Istruzioni per completare l\'installazione:</strong><br><br>'
+        
+        if (instructions.length > 0) {
+          instructions.forEach(instruction => {
+            instructionText += `${instruction}<br>`
+          })
+        }
+        
+        if (installCommand) {
+          instructionText += `<br><div class="alert alert-dark mb-0 mt-2" style="font-family: monospace;">${installCommand}</div>`
+        }
+        
+        instructionText += '</div>'
+        
+        toast.info(instructionText, {
+          duration: 0,  // Non chiudere automaticamente
+          position: 'top'
         })
         
         // Ricarica dati
@@ -337,7 +355,8 @@ export default {
         
       } catch (error) {
         console.error('Errore nell\'installazione:', error)
-        toast.error('Errore nell\'avvio dell\'installazione')
+        const errorMsg = error.response?.data?.detail || 'Errore nell\'avvio dell\'installazione'
+        toast.error(errorMsg)
       } finally {
         installing.value = false
         pendingInstallFile.value = null

@@ -307,18 +307,37 @@ async def install_update(
         # Pulizia backup vecchi in background
         background_tasks.add_task(cleanup_old_backups)
         
-        # Esegui l'installazione in background
-        logger.info(f"Avvio installazione aggiornamento: {request.filename}")
+        # Prepara l'installazione
+        logger.info(f"Preparazione installazione aggiornamento: {request.filename}")
+        
+        # Crea uno script helper per facilitare l'installazione
+        install_helper = Path(UPDATE_CONFIG["temp_dir"]) / "install_update.sh"
+        with open(install_helper, 'w') as f:
+            f.write(f"""#!/bin/bash
+# Script helper per installare l'aggiornamento ArmNAS
+cd {UPDATE_CONFIG["temp_dir"]}
+chmod +x {request.filename}
+./{request.filename} --auto
+""")
+        os.chmod(install_helper, 0o755)
         
         # Nota: l'installazione richiede privilegi root
-        # Questo endpoint avvia l'installazione, ma il processo effettivo
-        # deve essere gestito tramite un meccanismo esterno (es. systemd, sudo)
+        # L'utente deve eseguire il comando via SSH
         
         return {
             "success": True,
-            "message": "Installazione avviata",
+            "message": "Pacchetto pronto per l'installazione",
             "filename": request.filename,
-            "note": "L'installazione richiede privilegi elevati. Seguire le istruzioni a schermo."
+            "install_command": f"sudo {file_path}",
+            "quick_install": f"sudo bash {install_helper}",
+            "instructions": [
+                "1. Connettiti al server via SSH",
+                f"2. Esegui: sudo {file_path}",
+                "3. Conferma l'installazione quando richiesto",
+                "4. Attendi il completamento (2-5 minuti)",
+                "5. I servizi verranno riavviati automaticamente"
+            ],
+            "note": "L'installazione richiede accesso SSH con privilegi root"
         }
         
     except Exception as e:
