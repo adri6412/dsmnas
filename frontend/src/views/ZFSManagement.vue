@@ -473,14 +473,12 @@
 <script>
 import { ref, computed, onMounted } from 'vue'
 import { useToast } from 'vue-toast-notification'
-import { useI18n } from 'vue-i18n'
 import axios from '@/plugins/axios'
 
 export default {
   name: 'ZFSManagement',
   setup() {
     const $toast = useToast()
-    const { t } = useI18n()
     
     // Stato
     const pools = ref([])
@@ -553,8 +551,8 @@ export default {
         const response = await axios.get('/api/zfs/pools')
         pools.value = response.data
       } catch (error) {
-        console.error(t('zfs.error_load_pools'), error)
-        $toast.error(t('zfs.error_load_pools'))
+        console.error('Errore durante il recupero dei pool ZFS:', error)
+        $toast.error('Errore durante il recupero dei pool ZFS')
       } finally {
         loadingPools.value = false
       }
@@ -567,8 +565,8 @@ export default {
         const response = await axios.get('/api/zfs/datasets')
         datasets.value = response.data
       } catch (error) {
-        console.error(t('zfs.error_load_datasets'), error)
-        $toast.error(t('zfs.error_load_datasets'))
+        console.error('Errore durante il recupero dei dataset ZFS:', error)
+        $toast.error('Errore durante il recupero dei dataset ZFS')
       } finally {
         loadingDatasets.value = false
       }
@@ -581,8 +579,8 @@ export default {
         const response = await axios.get('/api/zfs/available-disks')
         availableDisks.value = response.data
       } catch (error) {
-        console.error(t('zfs.error_load_disks'), error)
-        $toast.error(t('zfs.error_load_disks'))
+        console.error('Errore durante il recupero dei dischi disponibili:', error)
+        $toast.error('Errore durante il recupero dei dischi disponibili')
       } finally {
         loadingDisks.value = false
       }
@@ -620,17 +618,17 @@ export default {
     const getRaidTypeDescription = computed(() => {
       switch (createPoolForm.value.raidType) {
         case 'stripe':
-          return t('zfs.raid_stripe_desc', 'Stripe (RAID 0): Massime prestazioni e capacità, ma nessuna ridondanza. Se un disco fallisce, tutti i dati sono persi.')
+          return 'Stripe (RAID 0): Massime prestazioni e capacità, ma nessuna ridondanza. Se un disco fallisce, tutti i dati sono persi.'
         case 'mirror':
-          return t('zfs.raid_mirror_desc', 'Mirror (RAID 1): Ogni dato è duplicato su tutti i dischi. Offre la massima ridondanza ma dimezza la capacità totale.')
+          return 'Mirror (RAID 1): Ogni dato è duplicato su tutti i dischi. Offre la massima ridondanza ma dimezza la capacità totale.'
         case 'raidz':
-          return t('zfs.raid_raidz_desc', 'RAIDZ (RAID 5): Richiede almeno 3 dischi. Può sopravvivere al guasto di 1 disco.')
+          return 'RAIDZ (RAID 5): Richiede almeno 3 dischi. Può sopravvivere al guasto di 1 disco.'
         case 'raidz2':
-          return t('zfs.raid_raidz2_desc', 'RAIDZ2 (RAID 6): Richiede almeno 4 dischi. Può sopravvivere al guasto di 2 dischi.')
+          return 'RAIDZ2 (RAID 6): Richiede almeno 4 dischi. Può sopravvivere al guasto di 2 dischi.'
         case 'raidz3':
-          return t('zfs.raid_raidz3_desc', 'RAIDZ3 (RAID 7): Richiede almeno 5 dischi. Può sopravvivere al guasto di 3 dischi.')
+          return 'RAIDZ3 (RAID 7): Richiede almeno 5 dischi. Può sopravvivere al guasto di 3 dischi.'
         default:
-          return t('zfs.raid_select_desc', 'Seleziona un tipo di RAID per vedere la descrizione.')
+          return 'Seleziona un tipo di RAID per vedere la descrizione.'
       }
     })
     
@@ -640,15 +638,15 @@ export default {
       
       switch (createPoolForm.value.raidType) {
         case 'stripe':
-          return numDisks < 1 ? t('zfs.disk_requirement_stripe', 'Seleziona almeno 1 disco.') : ''
+          return numDisks < 1 ? 'Seleziona almeno 1 disco.' : ''
         case 'mirror':
-          return numDisks < 2 ? t('zfs.disk_requirement_mirror', 'Seleziona almeno 2 dischi per il mirror.') : ''
+          return numDisks < 2 ? 'Seleziona almeno 2 dischi per il mirror.' : ''
         case 'raidz':
-          return numDisks < 3 ? t('zfs.disk_requirement_raidz', 'Seleziona almeno 3 dischi per RAIDZ.') : ''
+          return numDisks < 3 ? 'Seleziona almeno 3 dischi per RAIDZ.' : ''
         case 'raidz2':
-          return numDisks < 4 ? t('zfs.disk_requirement_raidz2', 'Seleziona almeno 4 dischi per RAIDZ2.') : ''
+          return numDisks < 4 ? 'Seleziona almeno 4 dischi per RAIDZ2.' : ''
         case 'raidz3':
-          return numDisks < 5 ? t('zfs.disk_requirement_raidz3', 'Seleziona almeno 5 dischi per RAIDZ3.') : ''
+          return numDisks < 5 ? 'Seleziona almeno 5 dischi per RAIDZ3.' : ''
         default:
           return ''
       }
@@ -706,9 +704,9 @@ export default {
         const response = await axios.get(`/api/zfs/pools/${poolName}/status`)
         poolStatus.value = response.data.status
       } catch (error) {
-        console.error(t('zfs.error_load_pool_status'), error)
-        $toast.error(t('zfs.error_load_pool_status'))
-        poolStatus.value = t('zfs.error_load_pool_status')
+        console.error('Errore durante il recupero dello stato del pool:', error)
+        $toast.error('Errore durante il recupero dello stato del pool')
+        poolStatus.value = 'Errore durante il recupero dello stato del pool'
       } finally {
         loadingPoolStatus.value = false
       }
@@ -724,8 +722,8 @@ export default {
         const response = await axios.get(`/api/zfs/datasets/${datasetName}/properties`)
         datasetProperties.value = response.data.properties
       } catch (error) {
-        console.error(t('zfs.error_load_dataset_properties'), error)
-        $toast.error(t('zfs.error_load_dataset_properties'))
+        console.error('Errore durante il recupero delle proprietà del dataset:', error)
+        $toast.error('Errore durante il recupero delle proprietà del dataset')
         datasetProperties.value = null
       } finally {
         loadingDatasetProperties.value = false
@@ -766,13 +764,13 @@ export default {
           mount_point: mountPoint
         })
         
-        $toast.success(response.data.message || t('zfs.success_create_pool'))
+        $toast.success(response.data.message || 'Pool ZFS creato con successo')
         showCreatePool.value = false
         refreshPools()
         refreshDatasets()
       } catch (error) {
-        console.error(t('zfs.error_create_pool'), error)
-        $toast.error(error.response?.data?.detail || t('zfs.error_create_pool'))
+        console.error('Errore durante la creazione del pool ZFS:', error)
+        $toast.error(error.response?.data?.detail || 'Errore durante la creazione del pool ZFS')
       } finally {
         isCreatingPool.value = false
       }
@@ -801,12 +799,12 @@ export default {
           compression: createDatasetForm.value.compression || null
         })
         
-        $toast.success(response.data.message || t('zfs.success_create_dataset'))
+        $toast.success(response.data.message || 'Dataset ZFS creato con successo')
         showCreateDataset.value = false
         refreshDatasets()
       } catch (error) {
-        console.error(t('zfs.error_create_dataset'), error)
-        $toast.error(error.response?.data?.detail || t('zfs.error_create_dataset'))
+        console.error('Errore durante la creazione del dataset ZFS:', error)
+        $toast.error(error.response?.data?.detail || 'Errore durante la creazione del dataset ZFS')
       } finally {
         isCreatingDataset.value = false
       }
@@ -822,13 +820,13 @@ export default {
           }
         })
         
-        $toast.success(response.data.message || t('zfs.success_destroy_pool'))
+        $toast.success(response.data.message || 'Pool ZFS eliminato con successo')
         showDestroyPoolModal.value = false
         refreshPools()
         refreshDatasets()
       } catch (error) {
-        console.error(t('zfs.error_destroy_pool'), error)
-        $toast.error(error.response?.data?.detail || t('zfs.error_destroy_pool'))
+        console.error('Errore durante l\'eliminazione del pool ZFS:', error)
+        $toast.error(error.response?.data?.detail || 'Errore durante l\'eliminazione del pool ZFS')
       }
     }
     
@@ -843,12 +841,12 @@ export default {
           }
         })
         
-        $toast.success(response.data.message || t('zfs.success_destroy_dataset'))
+        $toast.success(response.data.message || 'Dataset ZFS eliminato con successo')
         showDestroyDatasetModal.value = false
         refreshDatasets()
       } catch (error) {
-        console.error(t('zfs.error_destroy_dataset'), error)
-        $toast.error(error.response?.data?.detail || t('zfs.error_destroy_dataset'))
+        console.error('Errore durante l\'eliminazione del dataset ZFS:', error)
+        $toast.error(error.response?.data?.detail || 'Errore durante l\'eliminazione del dataset ZFS')
       }
     }
     

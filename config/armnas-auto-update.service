@@ -1,0 +1,23 @@
+[Unit]
+Description=ArmNAS Auto-Update Service
+Documentation=https://github.com/adri6412/dsmnas
+After=network.target local-fs.target
+Before=armnas-backend.service nginx.service
+ConditionPathExists=/opt/armnas/pending-updates
+
+[Service]
+Type=oneshot
+ExecStart=/opt/armnas/auto-update.sh
+RemainAfterExit=no
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=600
+# Esegui come root
+User=root
+# Restart solo in caso di errore
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
+

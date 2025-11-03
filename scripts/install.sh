@@ -265,26 +265,19 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
-# Crea il servizio systemd per l'updater (servizio separato per aggiornamenti)
-info "Creazione del servizio systemd per l'updater..."
-cat > /etc/systemd/system/armnas-updater.service << EOF
-[Unit]
-Description=ArmNAS Update Service (Separate)
-After=network.target
-PartOf=armnas-backend.service
+# Copia script di auto-update
+info "Installazione script di auto-update..."
+cp "$REPO_DIR/scripts/auto-update.sh" /opt/armnas/auto-update.sh
+chmod +x /opt/armnas/auto-update.sh
 
-[Service]
-User=root
-WorkingDirectory=$BACKEND_DIR
-ExecStart=$BACKEND_DIR/venv/bin/python3 $BACKEND_DIR/updater_service.py
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
+# Crea directory per aggiornamenti pending
+mkdir -p /opt/armnas/pending-updates
+chmod 755 /opt/armnas/pending-updates
 
-[Install]
-WantedBy=multi-user.target
-EOF
+# Crea il servizio systemd per l'auto-update (eseguito all'avvio)
+info "Creazione del servizio systemd per l'auto-update..."
+cp "$REPO_DIR/config/armnas-auto-update.service" /etc/systemd/system/armnas-auto-update.service
+chmod 644 /etc/systemd/system/armnas-auto-update.service
 
 # Configura Nginx
 info "Configurazione di Nginx..."
@@ -422,7 +415,7 @@ chown -R armnas:armnas /mnt/nas_data
 info "Avvio e abilitazione dei servizi..."
 systemctl daemon-reload
 systemctl enable armnas-backend
-systemctl enable armnas-updater
+systemctl enable armnas-auto-update
 systemctl enable nginx
 systemctl enable smbd
 systemctl enable vsftpd

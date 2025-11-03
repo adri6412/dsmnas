@@ -269,3 +269,23 @@ async def stop_service(action: ServiceAction, current_admin = Depends(get_curren
         logger.error(f"Errore nell'arresto servizio {action.service_name}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.get("/version")
+async def get_system_version():
+    """
+    Ottiene la versione del sistema ArmNAS
+    """
+    import os
+    version_file = "/opt/armnas/VERSION"
+    
+    try:
+        if os.path.exists(version_file):
+            with open(version_file, 'r') as f:
+                version = f.read().strip()
+        else:
+            version = "0.2.1"  # Fallback version
+        
+        return {"version": version}
+    except Exception as e:
+        logger.error(f"Errore nel leggere la versione: {e}")
+        return {"version": "unknown"}

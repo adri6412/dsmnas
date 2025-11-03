@@ -268,10 +268,6 @@
                 <font-awesome-icon icon="power-off" class="me-2" />
                 {{ $t('dashboard.shutdown') }}
               </button>
-              <button class="btn btn-success" @click="updateSystem">
-                <font-awesome-icon icon="download" class="me-2" />
-                {{ $t('dashboard.update') }}
-              </button>
             </div>
           </div>
         </div>
@@ -452,29 +448,6 @@ export default {
       }
     }
     
-    const updateSystem = async () => {
-      // Verifica se l'utente è admin
-      if (!isAdmin.value) {
-        $toast.error('Solo gli amministratori possono aggiornare il sistema')
-        return
-      }
-      
-      try {
-        $toast.info('Aggiornamento del sistema in corso...')
-        const result = await store.dispatch('system/updateSystem')
-        if (result.success) {
-          $toast.success(result.message || 'Sistema aggiornato con successo')
-        } else {
-          $toast.error(result.message || 'Errore nell\'aggiornamento del sistema')
-        }
-      } catch (error) {
-        if (error.response && error.response.status === 403) {
-          $toast.error('Non hai i permessi per aggiornare il sistema')
-        } else {
-          $toast.error('Errore nell\'aggiornamento del sistema')
-        }
-      }
-    }
     
     // Funzioni di utilità
     const formatBytes = (bytes, decimals = 2) => {
@@ -522,7 +495,6 @@ export default {
       showShutdownConfirm,
       rebootSystem,
       shutdownSystem,
-      updateSystem,
       formatBytes,
       getCpuBarClass,
       getMemoryBarClass,
