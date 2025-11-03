@@ -326,28 +326,52 @@ export default {
           filename: pendingInstallFile.value
         })
         
-        // Mostra istruzioni dettagliate
-        const instructions = response.data.instructions || []
-        const installCommand = response.data.install_command || ''
+        toast.success(response.data.message || 'Installazione avviata', {
+          duration: 8000
+        })
         
-        let instructionText = '<div class="text-start"><strong>📋 Istruzioni per completare l\'installazione:</strong><br><br>'
-        
-        if (instructions.length > 0) {
-          instructions.forEach(instruction => {
-            instructionText += `${instruction}<br>`
+        if (response.data.note) {
+          toast.warning(response.data.note, {
+            duration: 0,  // Rimane fino a chiusura manuale
+            position: 'top'
           })
         }
         
-        if (installCommand) {
-          instructionText += `<br><div class="alert alert-dark mb-0 mt-2" style="font-family: monospace;">${installCommand}</div>`
+        if (response.data.warning) {
+          toast.warning(response.data.warning, {
+            duration: 10000
+          })
         }
         
-        instructionText += '</div>'
+        // Avvia polling per verificare quando l'installazione è completata
+        let reconnectAttempts = 0
+        const maxAttempts = 40  // 40 tentativi = ~2 minuti
         
-        toast.info(instructionText, {
-          duration: 0,  // Non chiudere automaticamente
-          position: 'top'
-        })
+        const checkConnection = setInterval(async () => {
+          try {
+            await axios.get('/api/updates/status', { timeout: 3000 })
+            // Se arriviamo qui, il backend è tornato online
+            clearInterval(checkConnection)
+            
+            toast.success('🎉 Aggiornamento completato! Ricarico la pagina...', {
+              duration: 3000
+            })
+            
+            // Ricarica la pagina dopo 3 secondi
+            setTimeout(() => {
+              window.location.reload()
+            }, 3000)
+            
+          } catch (error) {
+            reconnectAttempts++
+            if (reconnectAttempts >= maxAttempts) {
+              clearInterval(checkConnection)
+              toast.error('Timeout: impossibile verificare lo stato. Ricarica manualmente la pagina.', {
+                duration: 0
+              })
+            }
+          }
+        }, 3000)  // Controlla ogni 3 secondi
         
         // Ricarica dati
         await loadDownloadedUpdates()

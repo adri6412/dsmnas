@@ -307,37 +307,45 @@ async def install_update(
         # Pulizia backup vecchi in background
         background_tasks.add_task(cleanup_old_backups)
         
-        # Prepara l'installazione
-        logger.info(f"Preparazione installazione aggiornamento: {request.filename}")
+        # Avvia l'installazione in background
+        logger.info(f"Avvio installazione aggiornamento: {request.filename}")
         
-        # Crea uno script helper per facilitare l'installazione
-        install_helper = Path(UPDATE_CONFIG["temp_dir"]) / "install_update.sh"
-        with open(install_helper, 'w') as f:
-            f.write(f"""#!/bin/bash
-# Script helper per installare l'aggiornamento ArmNAS
-cd {UPDATE_CONFIG["temp_dir"]}
-chmod +x {request.filename}
-./{request.filename} --auto
-""")
-        os.chmod(install_helper, 0o755)
+        # Esegui l'installazione in background
+        async def run_installation():
+            try:
+                # Assicurati che il file sia eseguibile
+                os.chmod(file_path, 0o755)
+                
+                # Esegui il file .run con --auto (nessuna conferma richiesta)
+                process = await asyncio.create_subprocess_exec(
+                    str(file_path),
+                    "--auto",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=UPDATE_CONFIG["temp_dir"]
+                )
+                
+                stdout, stderr = await process.communicate()
+                
+                if process.returncode == 0:
+                    logger.info(f"Installazione completata con successo: {request.filename}")
+                    logger.info(f"Output: {stdout.decode()}")
+                else:
+                    logger.error(f"Installazione fallita: {request.filename}")
+                    logger.error(f"Error: {stderr.decode()}")
+                    
+            except Exception as e:
+                logger.error(f"Errore durante l'installazione in background: {e}")
         
-        # Nota: l'installazione richiede privilegi root
-        # L'utente deve eseguire il comando via SSH
+        # Avvia in background
+        background_tasks.add_task(run_installation)
         
         return {
             "success": True,
-            "message": "Pacchetto pronto per l'installazione",
+            "message": "Installazione avviata in background",
             "filename": request.filename,
-            "install_command": f"sudo {file_path}",
-            "quick_install": f"sudo bash {install_helper}",
-            "instructions": [
-                "1. Connettiti al server via SSH",
-                f"2. Esegui: sudo {file_path}",
-                "3. Conferma l'installazione quando richiesto",
-                "4. Attendi il completamento (2-5 minuti)",
-                "5. I servizi verranno riavviati automaticamente"
-            ],
-            "note": "L'installazione richiede accesso SSH con privilegi root"
+            "note": "L'installazione è in corso. I servizi verranno riavviati automaticamente al termine (2-5 minuti). La connessione potrebbe interrompersi brevemente.",
+            "warning": "Non chiudere questa pagina o il browser durante l'installazione."
         }
         
     except Exception as e:
