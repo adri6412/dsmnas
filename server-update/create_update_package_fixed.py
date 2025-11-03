@@ -605,8 +605,19 @@ fi
 log "🧹 Pulizia file temporanei..."
 rm -rf "$TEMP_CONFIG_DIR"
 
-# Riavvia il backend per applicare le modifiche immediatamente
-log "🔄 Riavvio servizio backend..."
+# Riavvia i servizi per applicare le modifiche immediatamente
+log "🔄 Riavvio servizi..."
+
+# Riavvia updater service (servizio separato per aggiornamenti)
+if systemctl list-unit-files | grep -q "armnas-updater"; then
+    systemctl restart armnas-updater || log "⚠️  Impossibile riavviare armnas-updater"
+    sleep 1
+    if systemctl is-active --quiet armnas-updater; then
+        log "✅ Updater service riavviato"
+    fi
+fi
+
+# Riavvia backend
 if systemctl list-unit-files | grep -q "$SERVICE_NAME"; then
     systemctl restart "$SERVICE_NAME" || log "⚠️  Impossibile riavviare $SERVICE_NAME"
     sleep 2
@@ -617,7 +628,7 @@ if systemctl list-unit-files | grep -q "$SERVICE_NAME"; then
     fi
 fi
 
-# Ricarica anche nginx per sicurezza
+# Ricarica nginx
 if systemctl list-unit-files | grep -q "$NGINX_SERVICE"; then
     systemctl reload "$NGINX_SERVICE" 2>/dev/null || systemctl restart "$NGINX_SERVICE" || log "⚠️  Impossibile ricaricare nginx"
     if systemctl is-active --quiet "$NGINX_SERVICE"; then

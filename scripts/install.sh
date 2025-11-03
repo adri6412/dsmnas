@@ -265,6 +265,27 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
+# Crea il servizio systemd per l'updater (servizio separato per aggiornamenti)
+info "Creazione del servizio systemd per l'updater..."
+cat > /etc/systemd/system/armnas-updater.service << EOF
+[Unit]
+Description=ArmNAS Update Service (Separate)
+After=network.target
+PartOf=armnas-backend.service
+
+[Service]
+User=root
+WorkingDirectory=$BACKEND_DIR
+ExecStart=$BACKEND_DIR/venv/bin/python3 $BACKEND_DIR/updater_service.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 # Configura Nginx
 info "Configurazione di Nginx..."
 cat > /etc/nginx/sites-available/armnas << EOF
@@ -401,6 +422,7 @@ chown -R armnas:armnas /mnt/nas_data
 info "Avvio e abilitazione dei servizi..."
 systemctl daemon-reload
 systemctl enable armnas-backend
+systemctl enable armnas-updater
 systemctl enable nginx
 systemctl enable smbd
 systemctl enable vsftpd
@@ -419,6 +441,7 @@ systemctl restart vsftpd
 systemctl restart ssh
 systemctl restart nginx
 systemctl restart armnas-backend
+systemctl restart armnas-updater
 
 # Crea uno script di avvio automatico per il montaggio del disco
 info "Creazione dello script di montaggio automatico..."
