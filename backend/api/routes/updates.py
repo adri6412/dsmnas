@@ -317,22 +317,29 @@ async def install_update(
                 os.chmod(file_path, 0o755)
                 
                 # Esegui il file .run con --auto (nessuna conferma richiesta)
+                # Usa stdout/stderr per loggare l'output in tempo reale
                 process = await asyncio.create_subprocess_exec(
                     str(file_path),
                     "--auto",
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,  # Unisci stderr a stdout
                     cwd=UPDATE_CONFIG["temp_dir"]
                 )
                 
-                stdout, stderr = await process.communicate()
+                # Leggi output in tempo reale e logga
+                while True:
+                    line = await process.stdout.readline()
+                    if not line:
+                        break
+                    logger.info(f"[UPDATE] {line.decode().strip()}")
+                
+                await process.wait()
                 
                 if process.returncode == 0:
-                    logger.info(f"Installazione completata con successo: {request.filename}")
-                    logger.info(f"Output: {stdout.decode()}")
+                    logger.info(f"✅ Installazione completata con successo: {request.filename}")
                 else:
-                    logger.error(f"Installazione fallita: {request.filename}")
-                    logger.error(f"Error: {stderr.decode()}")
+                    logger.error(f"❌ Installazione fallita con codice: {process.returncode}")
+                    logger.error(f"File: {request.filename}")
                     
             except Exception as e:
                 logger.error(f"Errore durante l'installazione in background: {e}")
