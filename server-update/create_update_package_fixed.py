@@ -577,6 +577,26 @@ fi
 log "🧹 Pulizia file temporanei..."
 rm -rf "$TEMP_CONFIG_DIR"
 
+# Riavvia il backend per applicare le modifiche immediatamente
+log "🔄 Riavvio servizio backend..."
+if systemctl list-unit-files | grep -q "$SERVICE_NAME"; then
+    systemctl restart "$SERVICE_NAME" || log "⚠️  Impossibile riavviare $SERVICE_NAME"
+    sleep 2
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        log "✅ Backend riavviato con la nuova versione"
+    else
+        log "⚠️  Backend non è attivo, controlla i log"
+    fi
+fi
+
+# Ricarica anche nginx per sicurezza
+if systemctl list-unit-files | grep -q "$NGINX_SERVICE"; then
+    systemctl reload "$NGINX_SERVICE" 2>/dev/null || systemctl restart "$NGINX_SERVICE" || log "⚠️  Impossibile ricaricare nginx"
+    if systemctl is-active --quiet "$NGINX_SERVICE"; then
+        log "✅ Nginx aggiornato"
+    fi
+fi
+
 echo ""
 echo "════════════════════════════════════════════════════════"
 log "✅ Aggiornamento completato con successo!"
@@ -585,16 +605,16 @@ echo ""
 log "📍 Directory installazione: $INSTALL_DIR"
 log "💾 Backup salvato in: $AUTO_BACKUP_PATH"
 log "📦 Versione installata: $VERSION"
+log "🌐 Backend e Nginx riavviati"
 echo ""
-log "⚠️  IMPORTANTE: Per applicare le modifiche, è necessario riavviare il NAS"
+log "💡 Il sistema è ora aggiornato e funzionante"
+log "   Puoi continuare a usare l'interfaccia web normalmente"
 echo ""
-log "🔄 Riavvia il NAS con uno di questi comandi:"
-echo "   - Dall'interfaccia web: Dashboard → Riavvia"
-echo "   - Da terminale: reboot"
+log "ℹ️  Si consiglia comunque di riavviare il NAS quando possibile per:"
+echo "   - Applicare eventuali aggiornamenti al kernel"
+echo "   - Assicurare che tutte le modifiche siano completamente attive"
 echo ""
-log "💡 Dopo il riavvio:"
-log "   - Verifica la nuova versione nella dashboard"
-log "   - Controlla che tutti i servizi siano attivi"
+log "🔄 Per riavviare: Dashboard → Riavvia oppure 'reboot'"
 echo ""
 
 exit 0
