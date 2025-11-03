@@ -304,42 +304,30 @@ async def install_update(
                 detail="Il file non è eseguibile"
             )
         
-        # Pulizia backup vecchi in background
-        background_tasks.add_task(cleanup_old_backups)
-        
-        # Avvia l'installazione in background
-        logger.info(f"Avvio installazione aggiornamento: {request.filename}")
-        
-        # Avvia l'installazione come processo separato (detached)
-        # Non usare background_tasks perché blocca lo shutdown di uvicorn
-        import subprocess
-        
         # Assicurati che il file sia eseguibile
         os.chmod(file_path, 0o755)
         
-        # Avvia il processo in background completamente detached
-        # usando nohup e subprocess.Popen
+        # Avvia il .run come processo shell separato
+        # Equivalente a lanciarlo da SSH in background
         log_file = Path(UPDATE_CONFIG["temp_dir"]) / f"install_{request.filename}.log"
         
-        with open(log_file, 'w') as log_out:
-            subprocess.Popen(
-                [str(file_path), "--auto"],
-                stdout=log_out,
-                stderr=subprocess.STDOUT,
-                cwd=UPDATE_CONFIG["temp_dir"],
-                start_new_session=True  # Processo completamente indipendente
-            )
+        # Lancia con nohup per renderlo completamente indipendente
+        command = f"nohup {file_path} --auto > {log_file} 2>&1 &"
+        subprocess.Popen(
+            command,
+            shell=True,
+            cwd=UPDATE_CONFIG["temp_dir"],
+            start_new_session=True
+        )
         
-        logger.info(f"✅ Installazione avviata come processo indipendente: {request.filename}")
-        logger.info(f"📋 Log salvato in: {log_file}")
+        logger.info(f"✅ Installazione lanciata: {request.filename}")
+        logger.info(f"📋 Log: {log_file}")
         
         return {
             "success": True,
-            "message": "Installazione avviata in background",
+            "message": "Installazione avviata",
             "filename": request.filename,
-            "note": "L'installazione è in corso (2-5 minuti). Al termine, sarà necessario RIAVVIARE il NAS per applicare le modifiche.",
-            "warning": "Non chiudere questa pagina durante l'installazione.",
-            "requires_reboot": True
+            "log_file": str(log_file)
         }
         
     except Exception as e:

@@ -326,66 +326,14 @@ export default {
           filename: pendingInstallFile.value
         })
         
-        toast.success(response.data.message || 'Installazione avviata', {
-          duration: 8000
-        })
-        
-        if (response.data.note) {
-          toast.info(response.data.note, {
-            duration: 0,  // Rimane fino a chiusura manuale
-            position: 'top'
-          })
-        }
-        
-        if (response.data.warning) {
-          toast.warning(response.data.warning, {
-            duration: 10000
-          })
-        }
-        
-        // Avvia polling per verificare quando l'installazione è completata
-        let pollAttempts = 0
-        const maxAttempts = 50  // 50 tentativi = ~2.5 minuti
-        
-        toast.info('⏳ Monitoraggio installazione in corso...', {
+        toast.success('✅ Installazione avviata in background!', {
           duration: 5000
         })
         
-        const checkInstallation = setInterval(async () => {
-          pollAttempts++
-          
-          try {
-            await axios.get('/api/updates/status', { timeout: 3000 })
-            // Backend ancora online, installazione probabilmente completata
-            
-            if (pollAttempts > 10) {  // Attendi almeno 30 secondi prima di considerare completato
-              clearInterval(checkInstallation)
-              
-              toast.success('✅ Aggiornamento completato!', {
-                duration: 0,
-                position: 'top'
-              })
-              
-              if (response.data.requires_reboot) {
-                setTimeout(() => {
-                  toast.warning('🔄 Riavvia il NAS per applicare le modifiche!', {
-                    duration: 0,
-                    position: 'top'
-                  })
-                }, 1000)
-              }
-            }
-            
-          } catch (error) {
-            // Backend offline o in riavvio
-            if (pollAttempts >= maxAttempts) {
-              clearInterval(checkInstallation)
-              toast.warning('⚠️ Installazione potrebbe essere ancora in corso. Controlla i log del sistema.', {
-                duration: 0
-              })
-            }
-          }
-        }, 3000)  // Controlla ogni 3 secondi
+        toast.info('⏳ L\'aggiornamento è in corso (2-5 minuti). Ricarica la pagina tra qualche minuto per vedere la nuova versione.', {
+          duration: 0,
+          position: 'top'
+        })
         
         // Ricarica dati
         await loadDownloadedUpdates()
