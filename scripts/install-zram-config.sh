@@ -169,6 +169,61 @@ echo ""
 cat /etc/systemd/zram-generator.conf
 echo ""
 
+# Crea script per ricreare directory dopo mount zram
+info "Creazione script post-mount zram..."
+cat > /usr/local/bin/fix-zram-directories.sh << 'FIXDIREOF'
+#!/bin/bash
+# Ricrea directory necessarie dopo mount zram su /var/log e /var/cache
+
+# Lista delle directory da creare
+DIRECTORIES=(
+    "/var/log/nginx"
+    "/var/log/samba"
+    "/var/log/apt"
+    "/var/log/docker"
+    "/var/cache/apt/archives/partial"
+    "/var/cache/debconf"
+)
+
+# Crea le directory se non esistono
+for dir in "${DIRECTORIES[@]}"; do
+    mkdir -p "$dir" 2>/dev/null || true
+done
+
+# Imposta permessi corretti
+chmod 755 /var/log/nginx 2>/dev/null || true
+chmod 755 /var/log/samba 2>/dev/null || true
+chmod 755 /var/log/apt 2>/dev/null || true
+
+exit 0
+FIXDIREOF
+
+chmod +x /usr/local/bin/fix-zram-directories.sh
+info "✓ Script fix-zram-directories.sh creato"
+
+# Crea servizio systemd per eseguire lo script dopo mount zram
+info "Creazione servizio systemd per directory post-zram..."
+cat > /etc/systemd/system/zram-fix-directories.service << 'SERVICEEOF'
+[Unit]
+Description=Create directories after zram mount
+After=systemd-zram-setup@zram1.service systemd-zram-setup@zram3.service
+Before=nginx.service smbd.service docker.service
+RequiresMountsFor=/var/log /var/cache
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/fix-zram-directories.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+SERVICEEOF
+
+systemctl enable zram-fix-directories.service 2>/dev/null || true
+info "✓ Servizio zram-fix-directories.service creato e abilitato"
+
 # Ricarica systemd per applicare la configurazione
 info "Ricaricamento configurazione systemd..."
 systemctl daemon-reload
@@ -207,6 +262,11 @@ fi
 
 # Attendi stabilizzazione
 sleep 2
+
+# Esegui subito lo script per creare le directory
+info "Creazione directory necessarie..."
+/usr/local/bin/fix-zram-directories.sh
+info "✓ Directory create"
 
 # Verifica che zram sia attivo
 info "Verifica stato zram..."
