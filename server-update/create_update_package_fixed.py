@@ -164,12 +164,25 @@ class UpdatePackageBuilder:
             script_count += 1
         print(f"    ✅ Script copiati: {script_count}")
         
-        # File di configurazione
+        # File di configurazione dalla root
         for conf_file in source_path.glob("*.conf"):
             print(f"  ⚙️  {conf_file.name}")
             shutil.copy2(conf_file, package_dir)
         
-        # Docker compose file
+        # File di configurazione dalla directory config/
+        config_dir = source_path / "config"
+        if config_dir.exists():
+            print("  📁 Copia file da config/...")
+            for conf_file in config_dir.glob("*.conf"):
+                print(f"    ⚙️  {conf_file.name}")
+                shutil.copy2(conf_file, package_dir)
+            
+            # Docker compose file da config/
+            for compose_file in config_dir.glob("docker-compose*.yml"):
+                print(f"    🐳 {compose_file.name}")
+                shutil.copy2(compose_file, package_dir)
+        
+        # Docker compose file dalla root (per retrocompatibilità)
         for compose_file in source_path.glob("docker-compose*.yml"):
             print(f"  🐳 {compose_file.name}")
             shutil.copy2(compose_file, package_dir)
