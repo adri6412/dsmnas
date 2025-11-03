@@ -215,7 +215,7 @@
                     placeholder="0000000000000"
                   >
                   <div class="form-text">
-                    Serial Number del tuo NAS Synology (opzionale)
+                    <strong>Opzionale:</strong> Serial Number del tuo NAS fisico Synology. Serve solo se vuoi fare login con il tuo account Synology. Lascia vuoto per uso standalone.
                   </div>
                 </div>
                 <div class="col-md-6">
@@ -228,7 +228,7 @@
                     placeholder="0000000000000"
                   >
                   <div class="form-text">
-                    Serial Number da usare per Virtual DSM. Puoi ottenerlo creando un'istanza in VMM temporaneamente.
+                    <strong>Opzionale:</strong> Serial Number univoco per questa VM. Puoi inventarne uno casuale (es: 1234ABC567890) o usare quello di una VM reale di Synology VMM. Serve per il login Synology.
                   </div>
                 </div>
               </div>
@@ -244,14 +244,17 @@
                     pattern="([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})"
                   >
                   <div class="form-text">
-                    MAC address per la VM (formato: 00:11:22:33:44:55 o 00-11-22-33-44-55). Puoi ottenerlo da VMM.
+                    <strong>Opzionale:</strong> MAC address della VM (formato: 00:11:22:33:44:55). Viene generato automaticamente se lasciato vuoto. Serve solo per il login Synology.
                   </div>
                 </div>
               </div>
               <div class="alert alert-info">
-                <strong>Nota:</strong> Configurare questi valori permette di accedere con il tuo account Synology. 
-                HOST_SERIAL è il Serial Number del tuo NAS fisico, mentre GUEST_SERIAL e VM_NET_MAC possono essere ottenuti 
-                creando un'istanza di VirtualDSM in Synology VMM temporaneamente.
+                <strong>💡 Quando servono questi valori?</strong><br>
+                Questi parametri sono <strong>opzionali</strong> e servono solo se vuoi:<br>
+                • Fare login con il tuo account Synology (myDS, QuickConnect)<br>
+                • Sincronizzare con altri dispositivi Synology<br><br>
+                <strong>Per uso standalone:</strong> Lascia tutto vuoto, Virtual DSM funzionerà lo stesso con account locale.<br><br>
+                <strong>Per login Synology:</strong> HOST_SERIAL è il serial del tuo NAS fisico (se lo hai). GUEST_SERIAL e VM_NET_MAC puoi inventarli o prenderli da una VM reale in Synology VMM.
               </div>
               <button 
                 type="submit" 

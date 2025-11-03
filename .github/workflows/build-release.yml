@@ -123,6 +123,9 @@ jobs:
           git config user.email "actions@github.com"
           git tag -a "v${{ steps.get_version.outputs.VERSION }}" -m "Release v${{ steps.get_version.outputs.VERSION }}"
           git push origin "v${{ steps.get_version.outputs.VERSION }}"
+          # Ricontrolla il tag appena creato
+          git fetch --tags
+          git checkout "v${{ steps.get_version.outputs.VERSION }}"
       
       - name: Create Release Notes
         id: release_notes
@@ -196,6 +199,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: v${{ steps.get_version.outputs.VERSION }}
           files: |
             server-update/updates/armnas_update_v${{ steps.get_version.outputs.VERSION }}.run
             server-update/updates/armnas_update_v${{ steps.get_version.outputs.VERSION }}.run.info
