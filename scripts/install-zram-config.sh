@@ -59,15 +59,20 @@ apt-get install -y systemd-zram-generator util-linux || {
 
 # Verifica installazione
 # systemd-zram-generator è un generatore systemd, non un comando eseguibile
-# Verifica che il pacchetto sia installato e che il file generatore esista
-if dpkg -l | grep -q "^ii.*systemd-zram-generator" && \
-   [ -f /usr/lib/systemd/system-generators/systemd-zram-generator ]; then
-    info "✓ systemd-zram-generator installato"
-elif [ -f /lib/systemd/system-generators/systemd-zram-generator ]; then
-    info "✓ systemd-zram-generator installato (percorso alternativo)"
+# Il file generatore si chiama "zram-generator" (senza systemd- davanti)
+if dpkg -l | grep -q "^ii.*systemd-zram-generator"; then
+    info "✓ Pacchetto systemd-zram-generator installato"
+    
+    # Verifica che il file generatore esista
+    if [ -f /usr/lib/systemd/system-generators/zram-generator ] || \
+       [ -f /lib/systemd/system-generators/zram-generator ]; then
+        info "✓ Generatore zram trovato"
+    else
+        warn "Generatore non trovato nei percorsi standard, ma pacchetto installato"
+    fi
 else
-    error "systemd-zram-generator non trovato dopo l'installazione"
-    error "Verifica manualmente con: dpkg -l | grep zram"
+    error "Pacchetto systemd-zram-generator non installato"
+    error "Verifica con: dpkg -l | grep zram"
     exit 1
 fi
 
@@ -173,12 +178,12 @@ systemctl daemon-reload
 info "Generazione dispositivi zram..."
 
 # Esegui generatore manualmente per creare subito i dispositivi (senza riavvio)
-# Il generatore potrebbe essere in /usr/lib o /lib
+# Il generatore si chiama "zram-generator" e può essere in /usr/lib o /lib
 GENERATOR_PATH=""
-if [ -x /usr/lib/systemd/system-generators/systemd-zram-generator ]; then
-    GENERATOR_PATH="/usr/lib/systemd/system-generators/systemd-zram-generator"
-elif [ -x /lib/systemd/system-generators/systemd-zram-generator ]; then
-    GENERATOR_PATH="/lib/systemd/system-generators/systemd-zram-generator"
+if [ -x /usr/lib/systemd/system-generators/zram-generator ]; then
+    GENERATOR_PATH="/usr/lib/systemd/system-generators/zram-generator"
+elif [ -x /lib/systemd/system-generators/zram-generator ]; then
+    GENERATOR_PATH="/lib/systemd/system-generators/zram-generator"
 fi
 
 if [ -n "$GENERATOR_PATH" ]; then
