@@ -39,7 +39,8 @@ info "Riferimento: https://github.com/systemd/zram-generator"
 echo ""
 
 # Verifica se già installato
-if command -v systemd-zram-generator >/dev/null 2>&1 && [ -f /etc/systemd/zram-generator.conf ]; then
+# systemd-zram-generator è un generatore systemd, verifica il pacchetto
+if dpkg -l | grep -q "^ii.*systemd-zram-generator" && [ -f /etc/systemd/zram-generator.conf ]; then
     info "systemd-zram-generator è già installato e configurato"
     zramctl 2>/dev/null || warn "zramctl non disponibile - installa util-linux"
     info "Configurazione attuale:"
@@ -57,12 +58,18 @@ apt-get install -y systemd-zram-generator util-linux || {
 }
 
 # Verifica installazione
-if ! command -v systemd-zram-generator >/dev/null 2>&1; then
+# systemd-zram-generator è un generatore systemd, non un comando eseguibile
+# Verifica che il pacchetto sia installato e che il file generatore esista
+if dpkg -l | grep -q "^ii.*systemd-zram-generator" && \
+   [ -f /usr/lib/systemd/system-generators/systemd-zram-generator ]; then
+    info "✓ systemd-zram-generator installato"
+elif [ -f /lib/systemd/system-generators/systemd-zram-generator ]; then
+    info "✓ systemd-zram-generator installato (percorso alternativo)"
+else
     error "systemd-zram-generator non trovato dopo l'installazione"
+    error "Verifica manualmente con: dpkg -l | grep zram"
     exit 1
 fi
-
-info "✓ systemd-zram-generator installato"
 
 # Rileva RAM disponibile
 info "Rilevamento RAM disponibile..."
@@ -73,35 +80,41 @@ info "RAM totale rilevata: ${TOTAL_RAM_GB}GB"
 
 # Calcola dimensioni zram in base alla RAM
 # - Swap: 25% della RAM totale (min 2GB, max 16GB)
-# - Log: 512MB (sufficiente per la maggior parte dei casi)
-# - Tmp: 2GB (temporanei)
+# - Log: 512MB-1GB (sufficiente per la maggior parte dei casi)
+# - Tmp: 2-4GB (file temporanei)
+# - Cache: 2-4GB (per apt cache e simili)
 
 if [ $TOTAL_RAM_GB -ge 64 ]; then
     # Sistema con 64GB+ RAM
     SWAP_SIZE=16384
-    LOG_SIZE=1024
+    LOG_SIZE=2048
     TMP_SIZE=4096
+    CACHE_SIZE=4096
 elif [ $TOTAL_RAM_GB -ge 32 ]; then
     # Sistema con 32-63GB RAM
     SWAP_SIZE=8192
-    LOG_SIZE=512
-    TMP_SIZE=2048
+    LOG_SIZE=1024
+    TMP_SIZE=4096
+    CACHE_SIZE=2048
 elif [ $TOTAL_RAM_GB -ge 16 ]; then
     # Sistema con 16-31GB RAM
     SWAP_SIZE=4096
     LOG_SIZE=512
     TMP_SIZE=2048
+    CACHE_SIZE=2048
 else
     # Sistema con meno di 16GB RAM
     SWAP_SIZE=2048
     LOG_SIZE=256
     TMP_SIZE=1024
+    CACHE_SIZE=1024
 fi
 
 info "Configurazione zram ottimizzata:"
 info "  - Swap: ${SWAP_SIZE}MB"
 info "  - Log: ${LOG_SIZE}MB"
 info "  - Tmp: ${TMP_SIZE}MB"
+info "  - Cache: ${CACHE_SIZE}MB"
 echo ""
 
 # Backup configurazione esistente
@@ -128,13 +141,22 @@ swap-priority = 100
 [zram1]
 zram-size = ${LOG_SIZE}
 compression-algorithm = zstd
+filesystem = ext4
 mount-point = /var/log
 
 # /tmp in RAM compressa
 [zram2]
 zram-size = ${TMP_SIZE}
 compression-algorithm = zstd
+filesystem = ext4
 mount-point = /tmp
+
+# /var/cache in RAM compressa (per apt e altri cache)
+[zram3]
+zram-size = ${CACHE_SIZE}
+compression-algorithm = zstd
+filesystem = ext4
+mount-point = /var/cache
 EOF
 
 info "✓ Configurazione /etc/systemd/zram-generator.conf creata"
@@ -150,11 +172,32 @@ systemctl daemon-reload
 # Per applicare ora senza riavvio, eseguiamo manualmente
 info "Generazione dispositivi zram..."
 
-# Esegui generatore (se disponibile)
-if [ -x /usr/lib/systemd/systemd-zram-generator ]; then
-    /usr/lib/systemd/systemd-zram-generator || {
-        warn "Generazione dispositivi fallita, riavvio consigliato"
+# Esegui generatore manualmente per creare subito i dispositivi (senza riavvio)
+# Il generatore potrebbe essere in /usr/lib o /lib
+GENERATOR_PATH=""
+if [ -x /usr/lib/systemd/system-generators/systemd-zram-generator ]; then
+    GENERATOR_PATH="/usr/lib/systemd/system-generators/systemd-zram-generator"
+elif [ -x /lib/systemd/system-generators/systemd-zram-generator ]; then
+    GENERATOR_PATH="/lib/systemd/system-generators/systemd-zram-generator"
+fi
+
+if [ -n "$GENERATOR_PATH" ]; then
+    info "Esecuzione generatore: $GENERATOR_PATH"
+    "$GENERATOR_PATH" /run/systemd/generator /run/systemd/generator.early /run/systemd/generator.late 2>&1 || {
+        warn "Generazione dispositivi fallita, riavvio necessario"
     }
+    
+    # Attiva i servizi generati
+    for service in /run/systemd/generator/systemd-zram-setup@*.service; do
+        if [ -f "$service" ]; then
+            SERVICE_NAME=$(basename "$service")
+            systemctl start "$SERVICE_NAME" 2>/dev/null || {
+                warn "Impossibile avviare $SERVICE_NAME ora, funzionerà dopo il riavvio"
+            }
+        fi
+    done
+else
+    warn "Generatore non trovato, i dispositivi saranno creati al prossimo riavvio"
 fi
 
 # Attendi stabilizzazione
