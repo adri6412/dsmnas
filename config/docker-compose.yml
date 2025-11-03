@@ -1,9 +1,11 @@
+version: '3.8'
+
 services:
   virtual-dsm:
     container_name: virtual-dsm
     image: vdsm/virtual-dsm
     environment:
-      DISK_SIZE: "256G"
+      - DISK_SIZE=256G
     devices:
       - /dev/kvm
       - /dev/net/tun

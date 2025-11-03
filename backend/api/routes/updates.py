@@ -308,7 +308,7 @@ async def install_update(
         background_tasks.add_task(cleanup_old_backups)
         
         # Esegui l'installazione in background
-        logger.info(f"Avvio installazione aggiornamento: {filename}")
+        logger.info(f"Avvio installazione aggiornamento: {request.filename}")
         
         # Nota: l'installazione richiede privilegi root
         # Questo endpoint avvia l'installazione, ma il processo effettivo
