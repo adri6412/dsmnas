@@ -1,0 +1,203 @@
+name: Build and Release Update Package
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v0.3.0, v1.0.0, etc.
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for changelog generation
+      
+      - name: Get version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Update VERSION file
+        run: |
+          echo "${{ steps.get_version.outputs.VERSION }}" > VERSION
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+      
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+      
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+      
+      - name: Install Python dependencies for packaging
+        run: |
+          pip install -r backend/requirements.txt || true
+      
+      - name: Generate changelog from commits
+        id: changelog
+        run: |
+          # Get commits since last tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "Generating changelog from $PREVIOUS_TAG to HEAD"
+            CHANGELOG=$(git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s" --no-merges)
+          else
+            echo "No previous tag found, using recent commits"
+            CHANGELOG=$(git log -10 --pretty=format:"- %s" --no-merges)
+          fi
+          
+          # Save changelog to file
+          echo "$CHANGELOG" > /tmp/changelog.txt
+          cat /tmp/changelog.txt
+          
+          # For GitHub output, escape newlines
+          CHANGELOG_ESCAPED=$(echo "$CHANGELOG" | sed ':a;N;$!ba;s/\n/\\n/g')
+          echo "CHANGELOG=$CHANGELOG_ESCAPED" >> $GITHUB_OUTPUT
+      
+      - name: Create update package
+        run: |
+          cd server-update
+          python3 create_update_package_fixed.py ${{ steps.get_version.outputs.VERSION }} \
+            --source .. \
+            --output ./updates \
+            --changelog "$(cat /tmp/changelog.txt | head -5 | tr '\n' ';')"
+      
+      - name: Verify package created
+        run: |
+          ls -lh server-update/updates/
+          if [ ! -f "server-update/updates/armnas_update_v${{ steps.get_version.outputs.VERSION }}.run" ]; then
+            echo "ERROR: Package file not created!"
+            exit 1
+          fi
+          if [ ! -f "server-update/updates/armnas_update_v${{ steps.get_version.outputs.VERSION }}.run.info" ]; then
+            echo "ERROR: Info file not created!"
+            exit 1
+          fi
+      
+      - name: Read package info
+        id: package_info
+        run: |
+          INFO_FILE="server-update/updates/armnas_update_v${{ steps.get_version.outputs.VERSION }}.run.info"
+          SHA256=$(jq -r '.sha256' "$INFO_FILE")
+          SIZE=$(jq -r '.size' "$INFO_FILE")
+          echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
+          echo "SIZE=$SIZE" >> $GITHUB_OUTPUT
+          echo "Package SHA256: $SHA256"
+          echo "Package Size: $SIZE bytes"
+      
+      - name: Create Release Notes
+        id: release_notes
+        run: |
+          cat > /tmp/release_notes.md << 'EOF'
+          # ArmNAS v${{ steps.get_version.outputs.VERSION }}
+          
+          ## 📦 Installazione
+          
+          ### Metodo 1: Upload via interfaccia web (Consigliato)
+          1. Scarica il file `armnas_update_v${{ steps.get_version.outputs.VERSION }}.run`
+          2. Accedi alla tua istanza ArmNAS come amministratore
+          3. Vai su **Aggiornamenti** nella sidebar
+          4. Carica il file .run scaricato
+          5. Clicca su "Installa"
+          
+          ### Metodo 2: Installazione manuale
+          ```bash
+          # Scarica il file .run
+          wget https://github.com/${{ github.repository }}/releases/download/v${{ steps.get_version.outputs.VERSION }}/armnas_update_v${{ steps.get_version.outputs.VERSION }}.run
+          
+          # Rendi eseguibile
+          chmod +x armnas_update_v${{ steps.get_version.outputs.VERSION }}.run
+          
+          # Installa (richiede privilegi root)
+          sudo ./armnas_update_v${{ steps.get_version.outputs.VERSION }}.run
+          ```
+          
+          ## 🔒 Verifica Integrità
+          
+          **SHA256:** `${{ steps.package_info.outputs.SHA256 }}`
+          
+          ```bash
+          # Verifica checksum
+          sha256sum armnas_update_v${{ steps.get_version.outputs.VERSION }}.run
+          ```
+          
+          ## 📋 Changelog
+          
+          EOF
+          
+          # Add changelog
+          cat /tmp/changelog.txt >> /tmp/release_notes.md
+          
+          cat >> /tmp/release_notes.md << 'EOF'
+          
+          ## 📊 Dettagli Pacchetto
+          
+          - **Versione:** ${{ steps.get_version.outputs.VERSION }}
+          - **Dimensione:** $((${{ steps.package_info.outputs.SIZE }} / 1024 / 1024)) MB
+          - **Formato:** Self-extracting .run package
+          - **Compatibilità:** ArmNAS 0.2.0+
+          
+          ## ⚠️ Note Importanti
+          
+          - Backup automatico creato prima dell'installazione
+          - I servizi verranno riavviati automaticamente
+          - Tempo stimato di installazione: 2-5 minuti
+          
+          ## 🆘 Supporto
+          
+          In caso di problemi:
+          1. Controlla i log: `journalctl -u armnas-backend -f`
+          2. Ripristina da backup: vai su Aggiornamenti > Backup
+          3. Apri una issue su GitHub
+          
+          EOF
+          
+          cat /tmp/release_notes.md
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            server-update/updates/armnas_update_v${{ steps.get_version.outputs.VERSION }}.run
+            server-update/updates/armnas_update_v${{ steps.get_version.outputs.VERSION }}.run.info
+          body_path: /tmp/release_notes.md
+          draft: false
+          prerelease: false
+          name: ArmNAS v${{ steps.get_version.outputs.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: armnas-update-package
+          path: |
+            server-update/updates/armnas_update_v${{ steps.get_version.outputs.VERSION }}.run
+            server-update/updates/armnas_update_v${{ steps.get_version.outputs.VERSION }}.run.info
+          retention-days: 90
+      
+      - name: Success notification
+        run: |
+          echo "✅ Release v${{ steps.get_version.outputs.VERSION }} created successfully!"
+          echo "📦 Package: armnas_update_v${{ steps.get_version.outputs.VERSION }}.run"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.get_version.outputs.VERSION }}"
+

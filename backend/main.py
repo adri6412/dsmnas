@@ -5,7 +5,7 @@ import uvicorn
 import os
 from sqlalchemy.orm import Session
 
-from api.routes import disk, auth, zfs, docker, system
+from api.routes import disk, auth, zfs, docker, system, updates
 from api.database import get_db
 from api.auth import get_current_admin, init_admin_user
 
@@ -49,6 +49,7 @@ app.include_router(disk.router, prefix="/api/disk", tags=["Disco"], dependencies
 app.include_router(zfs.router, prefix="/api/zfs", tags=["ZFS"], dependencies=[Depends(get_current_admin)])
 app.include_router(docker.router, prefix="/api/docker", tags=["Virtual DSM"], dependencies=[Depends(get_current_admin)])
 app.include_router(system.router, prefix="/api/system", tags=["Sistema"], dependencies=[Depends(get_current_admin)])
+app.include_router(updates.router, prefix="/api/updates", tags=["Aggiornamenti"], dependencies=[Depends(get_current_admin)])
 
 # Commentiamo questa parte perché i file statici sono serviti da Nginx
 # app.mount("/", StaticFiles(directory="../frontend/dist", html=True), name="frontend")

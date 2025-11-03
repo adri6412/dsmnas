@@ -33,6 +33,11 @@
         <font-awesome-icon icon="lock" />
         <span v-if="!isCollapsed">{{ $t('sidebar.auth_users') || 'Utenti' }}</span>
       </router-link>
+      
+      <router-link v-if="isAdmin" to="/updates" class="menu-item" :class="{ active: $route.path === '/updates' }">
+        <font-awesome-icon icon="sync-alt" />
+        <span v-if="!isCollapsed">{{ $t('sidebar.updates') || 'Aggiornamenti' }}</span>
+      </router-link>
     </div>
     
     <div class="sidebar-footer">

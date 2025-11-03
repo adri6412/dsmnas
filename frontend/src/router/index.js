@@ -9,6 +9,7 @@ import AuthUserManagement from '@/views/AuthUserManagement.vue'
 import UserProfile from '@/views/UserProfile.vue'
 import ZFSManagement from '@/views/ZFSManagement.vue'
 import VirtualDSM from '@/views/VirtualDSM.vue'
+import UpdateManagement from '@/views/UpdateManagement.vue'
 
 const routes = [
   {
@@ -52,6 +53,12 @@ const routes = [
     name: 'UserProfile',
     component: UserProfile,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/updates',
+    name: 'UpdateManagement',
+    component: UpdateManagement,
+    meta: { requiresAuth: true, requiresAdmin: true }
   },
   // Reindirizza tutte le rotte non trovate alla dashboard
   {

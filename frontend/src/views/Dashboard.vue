@@ -205,57 +205,6 @@
         </div>
       </div>
       
-      <!-- Stato dei servizi -->
-      <div class="col-md-6 mb-4">
-        <div class="card h-100">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">
-              <font-awesome-icon icon="server" class="me-2" />
-              {{ $t('dashboard.services') }}
-            </h5>
-            <button class="btn btn-sm btn-outline-primary" @click="refreshServices">
-              <font-awesome-icon icon="sync" :class="{ 'fa-spin': loadingServices }" />
-            </button>
-          </div>
-          <div class="card-body">
-            <div v-if="loadingServices" class="text-center py-3">
-              <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">{{ $t('common.loading') }}</span>
-              </div>
-            </div>
-            <div v-else-if="services && services.length">
-              <table class="table table-hover">
-                <thead>
-                  <tr>
-                    <th>{{ $t('dashboard.service_name') }}</th>
-                    <th>{{ $t('dashboard.service_status') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="service in services" :key="service.name">
-                    <td>{{ getServiceDisplayName(service.name) }}</td>
-                    <td>
-                      <span
-                        class="badge"
-                        :class="service.running ? 'bg-success' : 'bg-danger'"
-                      >
-                        {{ service.running ? $t('common.running') : $t('common.stopped') }}
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div v-else class="text-center py-3 text-muted">
-              <p>{{ $t('common.error') }}</p>
-              <button class="btn btn-sm btn-primary mt-2" @click="refreshServices">
-                {{ $t('common.retry') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
       <!-- Utilizzo disco -->
       <div class="col-md-6 mb-4">
         <div class="card h-100">
@@ -368,10 +317,8 @@ export default {
     
     // Stato
     const systemInfo = ref(null)
-    const services = ref([])
     const disks = ref([])
     const loading = ref(false)
-    const loadingServices = ref(false)
     const loadingDisks = ref(false)
     const showRebootModal = ref(false)
     const showShutdownModal = ref(false)
@@ -394,9 +341,8 @@ export default {
       // Carica i dati
       refreshSystemInfo()
       
-      // Carica i servizi e i dischi solo se l'utente è admin
+      // Carica i dischi solo se l'utente è admin
       if (isAdmin.value) {
-        refreshServices()
         refreshDisks()
       }
     })
@@ -415,41 +361,6 @@ export default {
         }
       } finally {
         loading.value = false
-      }
-    }
-    
-    const refreshServices = async () => {
-      loadingServices.value = true
-      try {
-        // Verifica se l'utente è admin
-        if (!isAdmin.value) {
-          $toast.error('Solo gli amministratori possono visualizzare lo stato dei servizi')
-          loadingServices.value = false
-          return
-        }
-        
-        // Chiamata tramite Vuex
-        await store.dispatch('system/fetchServices')
-        services.value = store.getters['system/allServices']
-
-        // Verifica se c'è un errore nello store
-        if (store.getters['system/hasError']) {
-          const errorMsg = store.getters['system/errorMessage']
-          $toast.error(errorMsg || 'Errore nel caricamento dello stato dei servizi')
-        }
-
-        // Verifica se i servizi sono stati caricati correttamente
-        if (!services.value || services.value.length === 0) {
-          console.warn('Nessun servizio caricato')
-        }
-      } catch (error) {
-        if (error.response && error.response.status === 403) {
-          $toast.error('Non hai i permessi per accedere a queste informazioni')
-        } else {
-          $toast.error('Errore nel caricamento dello stato dei servizi')
-        }
-      } finally {
-        loadingServices.value = false
       }
     }
     
@@ -596,32 +507,16 @@ export default {
       return 'bg-danger'
     }
     
-    const getServiceDisplayName = (serviceName) => {
-      switch (serviceName) {
-        case 'smbd':
-          return 'Samba'
-        case 'vsftpd':
-          return 'FTP'
-        case 'ssh':
-          return 'SSH/SFTP'
-        default:
-          return serviceName
-      }
-    }
-    
     return {
       systemInfo,
-      services,
       disks,
       loading,
-      loadingServices,
       loadingDisks,
       showRebootModal,
       showShutdownModal,
       currentUser,
       isAdmin,
       refreshSystemInfo,
-      refreshServices,
       refreshDisks,
       showRebootConfirm,
       showShutdownConfirm,
@@ -631,8 +526,7 @@ export default {
       formatBytes,
       getCpuBarClass,
       getMemoryBarClass,
-      getDiskBarClass,
-      getServiceDisplayName
+      getDiskBarClass
     }
   }
 }

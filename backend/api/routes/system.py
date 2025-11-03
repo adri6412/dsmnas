@@ -126,13 +126,20 @@ async def get_system_info(current_admin = Depends(get_current_admin)):
         mem = psutil.virtual_memory()
         mem_total_gb = round(mem.total / (1024**3), 1)
         mem_used_gb = round(mem.used / (1024**3), 1)
-        mem_percent = mem.percent
+        mem_percent = round(mem.percent, 1)
+        
+        # Ottieni info CPU
+        cpu_percent = psutil.cpu_percent(interval=1)
         
         return {
             "hostname": hostname,
             "os": os_info,
             "kernel": kernel,
             "uptime": uptime_str,
+            "cpu_usage": round(cpu_percent, 1),
+            "memory_total": mem.total,
+            "memory_used": mem.used,
+            "memory_percent": mem_percent,
             "memory": {
                 "total_gb": mem_total_gb,
                 "used_gb": mem_used_gb,

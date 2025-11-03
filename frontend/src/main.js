@@ -18,7 +18,9 @@ import {
   faUserPlus, faAngleLeft, faAngleRight, faSignOutAlt,
   faFileImage, faFileWord, faFileExcel, faFilePdf, faFileArchive,
   faFileAudio, faFileVideo, faFileCode, faFolderPlus, faUserCog,
-  faUser, faKey, faShieldAlt, faDatabase
+  faUser, faKey, faShieldAlt, faDatabase, faSyncAlt, faBell,
+  faExclamationCircle, faCheckCircle, faSave, faArchive, faUndo,
+  faSpinner, faBox, faExternalLinkAlt
 } from '@fortawesome/free-solid-svg-icons'
 
 // Importa gli stili Bootstrap
@@ -47,7 +49,9 @@ library.add(
   faUserPlus, faAngleLeft, faAngleRight, faSignOutAlt,
   faFileImage, faFileWord, faFileExcel, faFilePdf, faFileArchive,
   faFileAudio, faFileVideo, faFileCode, faFolderPlus, faUserCog,
-  faUser, faKey, faShieldAlt, faDatabase
+  faUser, faKey, faShieldAlt, faDatabase, faSyncAlt, faBell,
+  faExclamationCircle, faCheckCircle, faSave, faArchive, faUndo,
+  faSpinner, faBox, faExternalLinkAlt
 )
 
 // Crea l'app Vue
