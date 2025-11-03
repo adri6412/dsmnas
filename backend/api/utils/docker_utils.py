@@ -51,6 +51,15 @@ def get_container_status(container_name: str) -> Dict[str, Any]:
     
     try:
         container_info = json.loads(cmd_result["output"])
+        
+        # Estrai il MAC address dalla rete del container
+        mac_address = None
+        networks = container_info.get("NetworkSettings", {}).get("Networks", {})
+        if networks:
+            # Prendi il MAC address dalla prima rete disponibile
+            first_network = next(iter(networks.values()), {})
+            mac_address = first_network.get("MacAddress", None)
+        
         return {
             "success": True,
             "exists": True,
@@ -58,7 +67,8 @@ def get_container_status(container_name: str) -> Dict[str, Any]:
             "status": container_info.get("State", {}).get("Status", "unknown"),
             "started_at": container_info.get("State", {}).get("StartedAt", ""),
             "image": container_info.get("Config", {}).get("Image", ""),
-            "ports": container_info.get("NetworkSettings", {}).get("Ports", {})
+            "ports": container_info.get("NetworkSettings", {}).get("Ports", {}),
+            "mac_address": mac_address
         }
     except json.JSONDecodeError:
         return {

@@ -244,7 +244,7 @@
                     pattern="([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})"
                   >
                   <div class="form-text">
-                    <strong>Opzionale:</strong> MAC address della VM (formato: 00:11:22:33:44:55). Viene generato automaticamente se lasciato vuoto. Serve solo per il login Synology.
+                    <strong>Opzionale:</strong> MAC address della VM (formato: 00:11:22:33:44:55). Una volta avviata la VM, il MAC address verrà mostrato sopra nella sezione "Stato Container". Lascialo vuoto e copialo da lì. Serve solo per il login Synology.
                   </div>
                 </div>
               </div>
