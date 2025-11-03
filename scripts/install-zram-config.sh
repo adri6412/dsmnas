@@ -48,7 +48,7 @@ fi
 # Installa dipendenze
 info "Installazione dipendenze..."
 apt-get update
-apt-get install -y git util-linux rsync || {
+apt-get install -y git util-linux rsync meson ninja-build || {
     error "Impossibile installare dipendenze"
     exit 1
 }
@@ -68,15 +68,47 @@ else
     cd "$ZRAM_REPO_DIR"
 fi
 
-# Esegui script di installazione
-info "Esecuzione script di installazione..."
+# Esegui installazione con meson (nuovo metodo)
+info "Installazione con meson..."
+
+# Verifica se esiste install.bash (vecchio metodo)
 if [ -f "install.bash" ]; then
-    bash install.bash || {
-        error "Installazione fallita"
+    info "Trovato install.bash (vecchio metodo), provo..."
+    bash install.bash 2>/dev/null && {
+        info "✓ Installato con install.bash"
+    } || {
+        warn "install.bash fallito, provo con meson..."
+        # Fallback a meson
+        if [ -f "meson.build" ]; then
+            info "Build con meson/ninja..."
+            meson setup build || {
+                error "meson setup fallito"
+                exit 1
+            }
+            ninja -C build install || {
+                error "ninja install fallito"
+                exit 1
+            }
+            info "✓ Installato con meson"
+        else
+            error "Né install.bash né meson.build disponibili"
+            exit 1
+        fi
+    }
+# Nuovo metodo: solo meson
+elif [ -f "meson.build" ]; then
+    info "Build con meson/ninja (nuovo metodo)..."
+    meson setup build || {
+        error "meson setup fallito"
         exit 1
     }
+    ninja -C build install || {
+        error "ninja install fallito"
+        exit 1
+    }
+    info "✓ Installato con meson"
 else
-    error "Script install.bash non trovato"
+    error "Metodo di installazione non trovato (né install.bash né meson.build)"
     exit 1
 fi
 
