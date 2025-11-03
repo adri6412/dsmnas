@@ -171,7 +171,7 @@ fi
 
 # Installa le dipendenze di sistema
 info "Installazione delle dipendenze di sistema..."
-apt-get install -y python3 python3-pip python3-venv python3-dev nodejs npm nginx samba vsftpd openssh-server smartmontools ntfs-3g libffi-dev libssl-dev build-essential zfsutils-linux qemu-kvm
+apt-get install -y python3 python3-pip python3-venv python3-dev nodejs npm nginx openssh-server smartmontools ntfs-3g libffi-dev libssl-dev build-essential zfsutils-linux qemu-kvm
 
 # Installa Docker
 info "Installazione di Docker..."
@@ -199,17 +199,7 @@ else
     info "Docker Compose è già disponibile"
 fi
 
-# Assicurati che i servizi siano installati correttamente
-info "Verifica dell'installazione dei servizi..."
-if ! dpkg -l | grep -q "samba"; then
-    warn "Samba non sembra essere installato correttamente. Reinstallazione..."
-    apt-get install --reinstall -y samba
-fi
-
-if ! dpkg -l | grep -q "vsftpd"; then
-    warn "vsftpd non sembra essere installato correttamente. Reinstallazione..."
-    apt-get install --reinstall -y vsftpd
-fi
+# Servizi verificati (nginx, ssh)
 
 # Configura il backend
 info "Configurazione del backend..."
@@ -318,93 +308,6 @@ rm -f /etc/nginx/sites-enabled/default
 # Verifica la configurazione di Nginx
 nginx -t
 
-# Configura Samba
-info "Configurazione di Samba..."
-if [ ! -f /etc/samba/smb.conf.bak ]; then
-    cp /etc/samba/smb.conf /etc/samba/smb.conf.bak
-fi
-
-cat > /etc/samba/smb.conf << EOF
-[global]
-   workgroup = WORKGROUP
-   server string = ArmNAS
-   server role = standalone server
-   log file = /var/log/samba/log.%m
-   max log size = 1000
-   logging = file
-   panic action = /usr/share/samba/panic-action %d
-   server role = standalone server
-   obey pam restrictions = yes
-   unix password sync = yes
-   passwd program = /usr/bin/passwd %u
-   passwd chat = *Enter\snew\s*\spassword:* %n\n *Retype\snew\s*\spassword:* %n\n *password\supdated\ssuccessfully* .
-   pam password change = yes
-   map to guest = bad user
-   usershare allow guests = yes
-
-[NAS]
-   path = /mnt/nas_data
-   browseable = yes
-   writable = yes
-   guest ok = no
-   read only = no
-   create mask = 0775
-   directory mask = 0775
-EOF
-
-# Configura vsftpd
-info "Configurazione di vsftpd..."
-if [ ! -f /etc/vsftpd.conf.bak ]; then
-    cp /etc/vsftpd.conf /etc/vsftpd.conf.bak
-fi
-
-cat > /etc/vsftpd.conf << EOF
-listen=YES
-listen_ipv6=NO
-anonymous_enable=NO
-local_enable=YES
-write_enable=YES
-local_umask=022
-dirmessage_enable=YES
-use_localtime=YES
-xferlog_enable=YES
-connect_from_port_20=YES
-chroot_local_user=YES
-secure_chroot_dir=/var/run/vsftpd/empty
-pam_service_name=vsftpd
-rsa_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
-rsa_private_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
-ssl_enable=NO
-EOF
-
-# Configura SSH per SFTP
-info "Configurazione di SSH per SFTP..."
-if ! grep -q "Subsystem sftp internal-sftp" /etc/ssh/sshd_config; then
-    # Backup del file di configurazione SSH
-    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
-    
-    # Rimuovi eventuali configurazioni Subsystem sftp esistenti
-    sed -i '/Subsystem\s\+sftp/d' /etc/ssh/sshd_config
-    
-    # Aggiungi la nuova configurazione SFTP
-    cat >> /etc/ssh/sshd_config << EOF
-
-# SFTP configuration
-Subsystem sftp internal-sftp
-
-Match Group sftponly
-    ChrootDirectory %h
-    ForceCommand internal-sftp
-    AllowTcpForwarding no
-    X11Forwarding no
-EOF
-fi
-
-# Crea il gruppo sftponly se non esiste
-if ! getent group sftponly > /dev/null; then
-    groupadd sftponly
-fi
-
 # Crea la directory per i dati del NAS
 info "Creazione della directory per i dati del NAS..."
 mkdir -p /mnt/nas_data
@@ -417,24 +320,12 @@ systemctl daemon-reload
 systemctl enable armnas-backend
 systemctl enable armnas-auto-update
 systemctl enable nginx
-systemctl enable smbd
-systemctl enable vsftpd
 systemctl enable ssh
 
-# Crea un utente di test per Samba
-info "Creazione dell'utente di test per Samba..."
-useradd -m -s /bin/bash armnas
-echo "armnas:armnas" | chpasswd
-smbpasswd -a armnas -n
-echo -e "armnas\narmnas" | smbpasswd -s -a armnas
-
 # Assicurati che i servizi siano avviati
-systemctl restart smbd
-systemctl restart vsftpd
 systemctl restart ssh
 systemctl restart nginx
 systemctl restart armnas-backend
-systemctl restart armnas-updater
 
 # Crea uno script di avvio automatico per il montaggio del disco
 info "Creazione dello script di montaggio automatico..."
