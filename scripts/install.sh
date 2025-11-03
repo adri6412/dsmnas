@@ -541,6 +541,7 @@ info "Riferimento: https://github.com/ecdye/zram-config"
 
 # Installa zram-config dal repository GitHub
 # Verifica se zram-config è già installato
+cat > /usr/local/bin/setup-overlayfs.sh << 'OVERLAYEOF'
 #!/bin/bash
 # Script per configurare overlayfs al boot
 # Questo script monta overlayfs su / per ridurre le scritture sulla SD
