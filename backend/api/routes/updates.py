@@ -310,42 +310,28 @@ async def install_update(
         # Avvia l'installazione in background
         logger.info(f"Avvio installazione aggiornamento: {request.filename}")
         
-        # Esegui l'installazione in background
-        async def run_installation():
-            try:
-                # Assicurati che il file sia eseguibile
-                os.chmod(file_path, 0o755)
-                
-                # Esegui il file .run con --auto (nessuna conferma richiesta)
-                # Usa stdout/stderr per loggare l'output in tempo reale
-                process = await asyncio.create_subprocess_exec(
-                    str(file_path),
-                    "--auto",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.STDOUT,  # Unisci stderr a stdout
-                    cwd=UPDATE_CONFIG["temp_dir"]
-                )
-                
-                # Leggi output in tempo reale e logga
-                while True:
-                    line = await process.stdout.readline()
-                    if not line:
-                        break
-                    logger.info(f"[UPDATE] {line.decode().strip()}")
-                
-                await process.wait()
-                
-                if process.returncode == 0:
-                    logger.info(f"✅ Installazione completata con successo: {request.filename}")
-                else:
-                    logger.error(f"❌ Installazione fallita con codice: {process.returncode}")
-                    logger.error(f"File: {request.filename}")
-                    
-            except Exception as e:
-                logger.error(f"Errore durante l'installazione in background: {e}")
+        # Avvia l'installazione come processo separato (detached)
+        # Non usare background_tasks perché blocca lo shutdown di uvicorn
+        import subprocess
         
-        # Avvia in background
-        background_tasks.add_task(run_installation)
+        # Assicurati che il file sia eseguibile
+        os.chmod(file_path, 0o755)
+        
+        # Avvia il processo in background completamente detached
+        # usando nohup e subprocess.Popen
+        log_file = Path(UPDATE_CONFIG["temp_dir"]) / f"install_{request.filename}.log"
+        
+        with open(log_file, 'w') as log_out:
+            subprocess.Popen(
+                [str(file_path), "--auto"],
+                stdout=log_out,
+                stderr=subprocess.STDOUT,
+                cwd=UPDATE_CONFIG["temp_dir"],
+                start_new_session=True  # Processo completamente indipendente
+            )
+        
+        logger.info(f"✅ Installazione avviata come processo indipendente: {request.filename}")
+        logger.info(f"📋 Log salvato in: {log_file}")
         
         return {
             "success": True,
