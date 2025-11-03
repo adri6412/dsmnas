@@ -4,8 +4,8 @@
     
     <div class="alert alert-info mb-4">
       <font-awesome-icon icon="info-circle" class="me-2" />
-      <strong>{{ $t('disk.info_title') || 'Gestione ZFS' }}</strong>
-      <p class="mb-0">{{ $t('disk.info_message') || 'Questa sezione mostra solo informazioni sui dischi. Per creare pool ZFS e gestire lo storage, utilizza la sezione' }} <router-link to="/zfs">ZFS Management</router-link>.</p>
+      <strong>Gestione Dischi</strong>
+      <p class="mb-0">Questa sezione mostra solo informazioni sui dischi. Per creare pool ZFS e gestire lo storage, utilizza la sezione <router-link to="/zfs">ZFS Management</router-link>.</p>
     </div>
     
     <div class="row">

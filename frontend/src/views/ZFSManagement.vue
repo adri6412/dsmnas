@@ -1,6 +1,6 @@
 <template>
   <div class="zfs-management">
-    <h1>{{ $t('zfs.title') || 'Gestione ZFS' }}</h1>
+    <h1>Gestione ZFS</h1>
     
     <div class="row mb-4">
       <div class="col-md-12">
@@ -8,7 +8,7 @@
           <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">
               <font-awesome-icon icon="database" class="me-2" />
-              {{ $t('zfs.pools') || 'Pool ZFS' }}
+              Pool ZFS
             </h5>
             <div>
               <button class="btn btn-sm btn-primary" @click="refreshPools">
@@ -28,7 +28,7 @@
               </div>
             </div>
             <div v-else-if="pools.length === 0" class="text-center py-3">
-              <p class="text-muted">{{ $t('zfs.no_pools') || 'Nessun pool ZFS trovato' }}</p>
+              <p class="text-muted">Nessun pool ZFS trovato</p>
               <button class="btn btn-primary" @click="showCreatePoolModal">
                 <font-awesome-icon icon="plus" class="me-1" />
                 {{ $t('zfs.create_first_pool') || 'Crea il tuo primo pool ZFS' }}
@@ -117,7 +117,7 @@
           <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">
               <font-awesome-icon icon="folder" class="me-2" />
-              {{ $t('zfs.datasets') || 'Dataset ZFS' }}
+              Dataset ZFS
             </h5>
             <button class="btn btn-sm btn-primary" @click="refreshDatasets">
               <font-awesome-icon icon="sync" :class="{ 'fa-spin': loadingDatasets }" class="me-1" />
@@ -131,7 +131,7 @@
               </div>
             </div>
             <div v-else-if="datasets.length === 0" class="text-center py-3">
-              <p class="text-muted">{{ $t('zfs.no_datasets') || 'Nessun dataset ZFS trovato' }}</p>
+              <p class="text-muted">Nessun dataset ZFS trovato</p>
             </div>
             <div v-else>
               <div class="table-responsive">
