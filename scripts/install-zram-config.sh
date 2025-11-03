@@ -48,7 +48,7 @@ fi
 # Installa dipendenze
 info "Installazione dipendenze..."
 apt-get update
-apt-get install -y git util-linux rsync meson ninja-build || {
+apt-get install -y git util-linux rsync || {
     error "Impossibile installare dipendenze"
     exit 1
 }
@@ -68,48 +68,55 @@ else
     cd "$ZRAM_REPO_DIR"
 fi
 
-# Esegui installazione con meson (nuovo metodo)
-info "Installazione con meson..."
+# Esegui script di installazione
+info "Esecuzione script di installazione..."
 
-# Verifica se esiste install.bash (vecchio metodo)
-if [ -f "install.bash" ]; then
-    info "Trovato install.bash (vecchio metodo), provo..."
-    bash install.bash 2>/dev/null && {
-        info "✓ Installato con install.bash"
-    } || {
-        warn "install.bash fallito, provo con meson..."
-        # Fallback a meson
-        if [ -f "meson.build" ]; then
-            info "Build con meson/ninja..."
-            meson setup build || {
-                error "meson setup fallito"
-                exit 1
-            }
-            ninja -C build install || {
-                error "ninja install fallito"
-                exit 1
-            }
-            info "✓ Installato con meson"
-        else
-            error "Né install.bash né meson.build disponibili"
-            exit 1
-        fi
-    }
-# Nuovo metodo: solo meson
-elif [ -f "meson.build" ]; then
-    info "Build con meson/ninja (nuovo metodo)..."
-    meson setup build || {
-        error "meson setup fallito"
+# Il repository zram-config ha diversi possibili script di installazione
+# Prova in ordine: install.sh, install.bash, installazione manuale
+
+if [ -f "install.sh" ]; then
+    info "Trovato install.sh, esecuzione..."
+    bash install.sh || {
+        error "install.sh fallito"
         exit 1
     }
-    ninja -C build install || {
-        error "ninja install fallito"
+    info "✓ Installato con install.sh"
+elif [ -f "install.bash" ]; then
+    info "Trovato install.bash, esecuzione..."
+    bash install.bash || {
+        error "install.bash fallito"
         exit 1
     }
-    info "✓ Installato con meson"
+    info "✓ Installato con install.bash"
 else
-    error "Metodo di installazione non trovato (né install.bash né meson.build)"
-    exit 1
+    # Installazione manuale
+    warn "Script di installazione non trovato, installazione manuale..."
+    
+    # Copia script principale
+    if [ -f "zram-config" ]; then
+        mkdir -p /usr/local/bin
+        cp zram-config /usr/local/bin/
+        chmod +x /usr/local/bin/zram-config
+        info "✓ Script zram-config copiato"
+    else
+        error "File zram-config non trovato nel repository"
+        exit 1
+    fi
+    
+    # Copia servizio systemd
+    if [ -f "zram-config.service" ]; then
+        cp zram-config.service /etc/systemd/system/
+        systemctl daemon-reload
+        info "✓ Servizio systemd installato"
+    elif [ -f "systemd/zram-config.service" ]; then
+        cp systemd/zram-config.service /etc/systemd/system/
+        systemctl daemon-reload
+        info "✓ Servizio systemd installato"
+    else
+        warn "File zram-config.service non trovato, il servizio potrebbe non funzionare"
+    fi
+    
+    info "✓ Installazione manuale completata"
 fi
 
 # Configurazione personalizzata per ARM NAS
