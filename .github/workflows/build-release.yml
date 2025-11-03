@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'  # Trigger on version tags like v0.3.0, v1.0.0, etc.
+  workflow_dispatch:  # Permette esecuzione manuale
+    inputs:
+      version:
+        description: 'Version number (es: 0.3.0)'
+        required: true
+        default: '0.3.0'
 
 jobs:
   build-and-release:
@@ -15,10 +21,14 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history for changelog generation
       
-      - name: Get version from tag
+      - name: Get version from tag or input
         id: get_version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
       
