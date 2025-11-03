@@ -304,6 +304,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useStore } from 'vuex'
 import { useToast } from 'vue-toast-notification'
+import axios from '@/plugins/axios'
 
 export default {
   name: 'Dashboard',
@@ -410,17 +411,14 @@ export default {
       }
       
       try {
-        const result = await store.dispatch('system/rebootSystem')
-        if (result.success) {
-          $toast.success('Il sistema verrà riavviato tra pochi secondi')
-        } else {
-          $toast.error(result.message || 'Errore nel riavvio del sistema')
-        }
+        const response = await axios.post('/api/system/reboot')
+        $toast.success(response.data.message || 'Il sistema verrà riavviato tra pochi secondi')
       } catch (error) {
+        console.error('Errore nel riavvio:', error)
         if (error.response && error.response.status === 403) {
           $toast.error('Non hai i permessi per riavviare il sistema')
         } else {
-          $toast.error('Errore nel riavvio del sistema')
+          $toast.error(error.response?.data?.detail || 'Errore nel riavvio del sistema')
         }
       }
     }
@@ -433,17 +431,14 @@ export default {
       }
       
       try {
-        const result = await store.dispatch('system/shutdownSystem')
-        if (result.success) {
-          $toast.success('Il sistema verrà spento tra pochi secondi')
-        } else {
-          $toast.error(result.message || 'Errore nello spegnimento del sistema')
-        }
+        const response = await axios.post('/api/system/shutdown')
+        $toast.success(response.data.message || 'Il sistema verrà spento tra pochi secondi')
       } catch (error) {
+        console.error('Errore nello spegnimento:', error)
         if (error.response && error.response.status === 403) {
           $toast.error('Non hai i permessi per spegnere il sistema')
         } else {
-          $toast.error('Errore nello spegnimento del sistema')
+          $toast.error(error.response?.data?.detail || 'Errore nello spegnimento del sistema')
         }
       }
     }

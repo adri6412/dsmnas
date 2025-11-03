@@ -289,3 +289,53 @@ async def get_system_version():
     except Exception as e:
         logger.error(f"Errore nel leggere la versione: {e}")
         return {"version": "unknown"}
+
+
+@router.post("/reboot")
+async def reboot_system(current_admin = Depends(get_current_admin)):
+    """
+    Riavvia il sistema
+    """
+    try:
+        logger.info("Richiesta di riavvio sistema")
+        
+        # Esegui il comando di riavvio in background dopo 2 secondi
+        # per dare tempo alla risposta HTTP di essere inviata
+        subprocess.Popen(
+            ["sh", "-c", "sleep 2 && systemctl reboot"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        
+        return {
+            "success": True,
+            "message": "Sistema in riavvio..."
+        }
+    except Exception as e:
+        logger.error(f"Errore nel riavvio: {e}")
+        raise HTTPException(status_code=500, detail=f"Errore nel riavvio del sistema: {str(e)}")
+
+
+@router.post("/shutdown")
+async def shutdown_system(current_admin = Depends(get_current_admin)):
+    """
+    Spegne il sistema
+    """
+    try:
+        logger.info("Richiesta di spegnimento sistema")
+        
+        # Esegui il comando di spegnimento in background dopo 2 secondi
+        # per dare tempo alla risposta HTTP di essere inviata
+        subprocess.Popen(
+            ["sh", "-c", "sleep 2 && systemctl poweroff"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        
+        return {
+            "success": True,
+            "message": "Sistema in spegnimento..."
+        }
+    except Exception as e:
+        logger.error(f"Errore nello spegnimento: {e}")
+        raise HTTPException(status_code=500, detail=f"Errore nello spegnimento del sistema: {str(e)}")
