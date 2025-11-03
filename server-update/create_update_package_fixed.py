@@ -353,15 +353,9 @@ if [[ -n "$BACKUP_PATH" ]]; then
     cp "$AUTO_BACKUP_PATH" "$BACKUP_PATH" || handle_error "Errore nella copia del backup"
 fi
 
-# Ferma i servizi per l'aggiornamento
-log "⏹️  Arresto servizi per aggiornamento..."
-if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-    systemctl stop "$SERVICE_NAME" || log "⚠️  Impossibile fermare $SERVICE_NAME"
-fi
-
-if systemctl is-active --quiet "$NGINX_SERVICE" 2>/dev/null; then
-    systemctl stop "$NGINX_SERVICE" || log "⚠️  Impossibile fermare $NGINX_SERVICE"
-fi
+# NON fermiamo i servizi durante l'aggiornamento
+# I file verranno sovrascritti e i servizi riavviati dopo il reboot
+log "ℹ️  Aggiornamento file in corso (servizi rimangono attivi)..."
 
 # Backup configurazioni critiche
 log "💾 Backup configurazioni..."
