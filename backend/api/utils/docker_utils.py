@@ -35,6 +35,52 @@ def is_docker_installed() -> bool:
     result = run_command(["which", "docker"])
     return result["success"]
 
+def get_qemu_vm_mac_address(container_name: str) -> Optional[str]:
+    """
+    Recupera il MAC address della VM QEMU che gira dentro il container Docker
+    """
+    try:
+        # Esegui comando dentro il container per trovare il processo QEMU
+        result = run_command(["docker", "exec", container_name, "ps", "aux"])
+        
+        if not result["success"]:
+            return None
+        
+        # Cerca il MAC address nei parametri di QEMU
+        # QEMU usa parametri come: -device virtio-net-pci,netdev=net0,mac=52:54:00:XX:XX:XX
+        # o -net nic,macaddr=52:54:00:XX:XX:XX
+        output = result["output"]
+        
+        # Pattern per trovare MAC address nei parametri QEMU
+        import re
+        
+        # Cerca mac= o macaddr=
+        mac_patterns = [
+            r'mac=([0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2})',
+            r'macaddr=([0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2})'
+        ]
+        
+        for pattern in mac_patterns:
+            match = re.search(pattern, output)
+            if match:
+                return match.group(1)
+        
+        # Se non troviamo il MAC nei parametri, proviamo a cercarlo nei file di configurazione
+        # o nei log del container
+        log_result = run_command(["docker", "logs", "--tail", "200", container_name])
+        if log_result["success"]:
+            for pattern in mac_patterns:
+                match = re.search(pattern, log_result["output"])
+                if match:
+                    return match.group(1)
+        
+        return None
+        
+    except Exception as e:
+        print(f"Errore nel recupero MAC address QEMU: {e}")
+        return None
+
+
 def get_container_status(container_name: str) -> Dict[str, Any]:
     """
     Ottiene lo stato di un container Docker
@@ -52,23 +98,23 @@ def get_container_status(container_name: str) -> Dict[str, Any]:
     try:
         container_info = json.loads(cmd_result["output"])
         
-        # Estrai il MAC address dalla rete del container
+        # Recupera il MAC address della VM QEMU (non del container Docker)
         mac_address = None
-        networks = container_info.get("NetworkSettings", {}).get("Networks", {})
-        if networks:
-            # Prendi il MAC address dalla prima rete disponibile
-            first_network = next(iter(networks.values()), {})
-            mac_address = first_network.get("MacAddress", None)
+        is_running = container_info.get("State", {}).get("Running", False)
+        
+        if is_running:
+            # Se il container è in esecuzione, prova a recuperare il MAC della VM QEMU
+            mac_address = get_qemu_vm_mac_address(container_name)
         
         return {
             "success": True,
             "exists": True,
-            "running": container_info.get("State", {}).get("Running", False),
+            "running": is_running,
             "status": container_info.get("State", {}).get("Status", "unknown"),
             "started_at": container_info.get("State", {}).get("StartedAt", ""),
             "image": container_info.get("Config", {}).get("Image", ""),
             "ports": container_info.get("NetworkSettings", {}).get("Ports", {}),
-            "mac_address": mac_address
+            "mac_address": mac_address  # MAC della VM QEMU, non del container
         }
     except json.JSONDecodeError:
         return {

@@ -95,6 +95,19 @@
                 <strong>Stato dettagliato:</strong> {{ containerStatus.status }}
               </div>
               
+              <div v-if="containerStatus.mac_address && containerStatus.running" class="alert alert-success py-2 mb-3">
+                <strong>🖧 MAC Address VM QEMU:</strong> <code class="fs-6 text-dark">{{ containerStatus.mac_address }}</code>
+                <button 
+                  class="btn btn-sm btn-outline-success ms-2" 
+                  @click="copyToClipboard(containerStatus.mac_address)"
+                  title="Copia MAC address"
+                >
+                  <font-awesome-icon icon="copy" />
+                </button>
+                <br>
+                <small class="text-muted">Questo è il MAC address della VM QEMU - usalo per la configurazione Serial Numbers se vuoi il login Synology</small>
+              </div>
+              
               <div class="btn-group">
                 <button 
                   v-if="!containerStatus.running" 
@@ -244,7 +257,9 @@
                     pattern="([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})"
                   >
                   <div class="form-text">
-                    <strong>Opzionale:</strong> MAC address della VM (formato: 00:11:22:33:44:55). Una volta avviata la VM, il MAC address verrà mostrato sopra nella sezione "Stato Container". Lascialo vuoto e copialo da lì. Serve solo per il login Synology.
+                    <strong>Opzionale:</strong> MAC address della VM QEMU (formato: 00:11:22:33:44:55). 
+                    <span class="text-success">Una volta avviata la VM, il MAC address della VM QEMU verrà recuperato automaticamente e mostrato sopra nella sezione "Stato Container".</span> 
+                    Copialo da lì se necessario per il login Synology.
                   </div>
                 </div>
               </div>
@@ -694,6 +709,16 @@ export default {
       return running ? 'bg-success' : 'bg-secondary'
     }
     
+    const copyToClipboard = async (text) => {
+      try {
+        await navigator.clipboard.writeText(text)
+        $toast.success('MAC address copiato negli appunti!')
+      } catch (error) {
+        console.error('Errore nella copia:', error)
+        $toast.error('Errore nella copia del MAC address')
+      }
+    }
+    
     return {
       dockerStatus,
       containerStatus,
@@ -724,7 +749,8 @@ export default {
       restartVirtualDSM,
       showLogsModal,
       getStatusClass,
-      getContainerStatusClass
+      getContainerStatusClass,
+      copyToClipboard
     }
   }
 }
