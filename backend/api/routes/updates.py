@@ -55,7 +55,24 @@ Path(UPDATE_CONFIG["temp_dir"]).mkdir(parents=True, exist_ok=True)
 
 
 def get_version():
-    """Ottiene la versione corrente del sistema"""
+    """Ottiene la versione corrente del sistema (legge sempre il file per avere la versione aggiornata)"""
+    # Rileggi il file VERSION ogni volta per avere sempre la versione aggiornata
+    VERSION_FILE_PROD = Path("/opt/armnas/VERSION")
+    VERSION_FILE_DEV = Path(__file__).parent.parent.parent.parent / "VERSION"
+    
+    VERSION_FILE = VERSION_FILE_PROD if VERSION_FILE_PROD.exists() else VERSION_FILE_DEV
+    
+    if VERSION_FILE.exists():
+        try:
+            with open(VERSION_FILE, 'r') as f:
+                current_version = f.read().strip()
+                # Aggiorna anche il config per coerenza
+                UPDATE_CONFIG["current_version"] = current_version
+                return current_version
+        except Exception as e:
+            logger.warning(f"Errore lettura VERSION: {e}")
+    
+    # Fallback sul valore in config
     return UPDATE_CONFIG["current_version"]
 
 
