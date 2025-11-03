@@ -1,0 +1,61 @@
+# Virtual DSM Bare Metal - GRUB Theme
+
+# General settings
+title-text: ""
+desktop-image: "background.png"
+desktop-color: "#1a1a2e"
+terminal-font: "Unifont Regular 16"
+
+# Boot menu
++ boot_menu {
+  left = 15%
+  width = 70%
+  top = 35%
+  height = 50%
+  item_font = "Unifont Regular 16"
+  item_color = "#e0e0e0"
+  selected_item_color = "#ffffff"
+  item_height = 32
+  item_padding = 8
+  item_spacing = 4
+  selected_item_pixmap_style = "select_*.png"
+}
+
+# Title
++ label {
+  top = 15%
+  left = 0
+  width = 100%
+  height = 50
+  align = "center"
+  color = "#ffffff"
+  font = "Unifont Regular 20"
+  text = "Virtual DSM Bare Metal"
+}
+
+# Subtitle
++ label {
+  top = 20%
+  left = 0
+  width = 100%
+  height = 30
+  align = "center"
+  color = "#a0a0a0"
+  font = "Unifont Regular 14"
+  text = "Synology DSM on ZFS - Bare Metal Installation"
+}
+
+# Progress bar
++ progress_bar {
+  id = "__timeout__"
+  left = 25%
+  width = 50%
+  top = 90%
+  height = 20
+  font = "Unifont Regular 12"
+  text_color = "#ffffff"
+  fg_color = "#4a90e2"
+  bg_color = "#2a2a3e"
+  border_color = "#5a5a6e"
+}
+

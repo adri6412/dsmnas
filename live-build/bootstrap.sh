@@ -66,9 +66,9 @@ configure_live_build() {
               --compression xz \
               --debian-installer live \
               --system live \
-              --iso-volume "ArmNAS-DSM-Installer" \
-              --iso-publisher "ArmNAS Project" \
-              --iso-application "ZFS NAS with Virtual DSM" \
+              --iso-volume "VirtualDSM-BareMetal" \
+              --iso-publisher "Virtual DSM Bare Metal Project" \
+              --iso-application "Synology DSM on ZFS - Bare Metal Installation" \
               --iso-preparer "live-build" || error "Errore nella configurazione"
 }
 

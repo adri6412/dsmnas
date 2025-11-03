@@ -133,9 +133,9 @@ EOF
               --compression xz \
               --debian-installer live \
               --system live \
-              --iso-volume "ArmNAS-DSM-Installer" \
-              --iso-publisher "ArmNAS Project" \
-              --iso-application "ZFS NAS with Virtual DSM" \
+              --iso-volume "VirtualDSM-BareMetal" \
+              --iso-publisher "Virtual DSM Bare Metal Project" \
+              --iso-application "Synology DSM on ZFS - Bare Metal Installation" \
               --iso-preparer "live-build" \
               --apt-options "--allow-unauthenticated --assume-yes" \
               2>&1 | tee -a build.log; then
