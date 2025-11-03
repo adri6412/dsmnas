@@ -1,12 +1,15 @@
-# zram-config per ARM NAS
+# zram per ARM NAS (systemd-zram-generator)
 
 ## TL;DR - Quick Start
 
 ```bash
-# Installa zram-config
+# Installa systemd-zram-generator
 sudo bash scripts/install-zram-config.sh
 
-# Verifica
+# Riavvia per applicare
+sudo reboot
+
+# Verifica dopo riavvio
 zramctl
 swapon --show
 
@@ -14,9 +17,9 @@ swapon --show
 sudo zpool create storage /dev/sdX  # Funziona! ✅
 ```
 
-## Cos'è zram-config?
+## Cos'è systemd-zram-generator?
 
-**zram-config** è uno strumento che crea dispositivi di storage compressi in RAM per:
+**systemd-zram-generator** è uno strumento integrato con systemd che crea dispositivi di storage compressi in RAM per:
 
 1. **Swap**: Memoria virtuale compressa (invece di swap su SD)
 2. **Log**: `/var/log` in RAM compressa con rotation automatica
@@ -34,14 +37,15 @@ OverlayFS (800+ righe di codice complesso)
 ZFS: "cannot mount '/storage': directory is already mounted" ❌
 ```
 
-### ✅ Soluzione con zram-config
+### ✅ Soluzione con systemd-zram-generator
 
 ```
-zram-config (configurazione semplice in /etc/ztab)
+systemd-zram-generator (file config semplice)
   ↓
 /storage LIBERO per ZFS ✅
 Swap e log in RAM compressa ✅
 Riduzione usura SD ~80% ✅
+Integrato con systemd ✅
 ```
 
 ## Come Funziona

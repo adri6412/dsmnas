@@ -1,11 +1,11 @@
 #!/bin/bash
-# Script per installare e configurare zram-config
-# Riferimento: https://github.com/ecdye/zram-config
+# Script per installare e configurare systemd-zram-generator
 # 
-# zram-config è una soluzione completa per gestire zram per:
+# systemd-zram-generator è una soluzione semplice e affidabile per:
 # - Swap compresso in RAM (invece di swap su SD - riduce usura)
-# - Directory in RAM compresso (es. /var/log)
-# - Supporto per log rotation automatica
+# - Directory in RAM compressa (es. /var/log, /tmp)
+# - Integrato con systemd (no compilazione richiesta)
+# - Disponibile nei repository ufficiali Debian
 
 set -e
 
@@ -34,230 +34,204 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-info "=== Installazione zram-config ==="
-info "Riferimento: https://github.com/ecdye/zram-config"
+info "=== Installazione systemd-zram-generator ==="
+info "Riferimento: https://github.com/systemd/zram-generator"
 echo ""
 
 # Verifica se già installato
-if [ -f "/usr/local/bin/zram-config" ] && systemctl is-active --quiet zram-config.service; then
-    info "zram-config è già installato e attivo"
+if command -v systemd-zram-generator >/dev/null 2>&1 && [ -f /etc/systemd/zram-generator.conf ]; then
+    info "systemd-zram-generator è già installato e configurato"
     zramctl 2>/dev/null || warn "zramctl non disponibile - installa util-linux"
+    info "Configurazione attuale:"
+    cat /etc/systemd/zram-generator.conf 2>/dev/null || true
     exit 0
 fi
 
-# Installa dipendenze
-info "Installazione dipendenze..."
+# Installa systemd-zram-generator
+info "Installazione systemd-zram-generator e dipendenze..."
 apt-get update
-apt-get install -y git util-linux rsync || {
-    error "Impossibile installare dipendenze"
+apt-get install -y systemd-zram-generator util-linux || {
+    error "Impossibile installare systemd-zram-generator"
+    error "Verifica che sia disponibile nel repository Debian/Ubuntu"
     exit 1
 }
 
-# Clone del repository (se non esiste già)
-ZRAM_REPO_DIR="/tmp/zram-config"
-if [ -d "$ZRAM_REPO_DIR" ]; then
-    info "Repository zram-config già clonato, aggiorno..."
-    cd "$ZRAM_REPO_DIR"
-    git pull || warn "Impossibile aggiornare repository"
+# Verifica installazione
+if ! command -v systemd-zram-generator >/dev/null 2>&1; then
+    error "systemd-zram-generator non trovato dopo l'installazione"
+    exit 1
+fi
+
+info "✓ systemd-zram-generator installato"
+
+# Rileva RAM disponibile
+info "Rilevamento RAM disponibile..."
+TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+TOTAL_RAM_GB=$((TOTAL_RAM_KB / 1024 / 1024))
+
+info "RAM totale rilevata: ${TOTAL_RAM_GB}GB"
+
+# Calcola dimensioni zram in base alla RAM
+# - Swap: 25% della RAM totale (min 2GB, max 16GB)
+# - Log: 512MB (sufficiente per la maggior parte dei casi)
+# - Tmp: 2GB (temporanei)
+
+if [ $TOTAL_RAM_GB -ge 64 ]; then
+    # Sistema con 64GB+ RAM
+    SWAP_SIZE=16384
+    LOG_SIZE=1024
+    TMP_SIZE=4096
+elif [ $TOTAL_RAM_GB -ge 32 ]; then
+    # Sistema con 32-63GB RAM
+    SWAP_SIZE=8192
+    LOG_SIZE=512
+    TMP_SIZE=2048
+elif [ $TOTAL_RAM_GB -ge 16 ]; then
+    # Sistema con 16-31GB RAM
+    SWAP_SIZE=4096
+    LOG_SIZE=512
+    TMP_SIZE=2048
 else
-    info "Clone repository zram-config da GitHub..."
-    git clone https://github.com/ecdye/zram-config.git "$ZRAM_REPO_DIR" || {
-        error "Impossibile clonare repository"
-        exit 1
-    }
-    cd "$ZRAM_REPO_DIR"
+    # Sistema con meno di 16GB RAM
+    SWAP_SIZE=2048
+    LOG_SIZE=256
+    TMP_SIZE=1024
 fi
 
-# Esegui script di installazione
-info "Esecuzione script di installazione..."
-
-# Il repository zram-config ha diversi possibili script di installazione
-# Prova in ordine: install.sh, install.bash, installazione manuale
-
-if [ -f "install.sh" ]; then
-    info "Trovato install.sh, esecuzione..."
-    bash install.sh || {
-        error "install.sh fallito"
-        exit 1
-    }
-    info "✓ Installato con install.sh"
-elif [ -f "install.bash" ]; then
-    info "Trovato install.bash, esecuzione..."
-    bash install.bash || {
-        error "install.bash fallito"
-        exit 1
-    }
-    info "✓ Installato con install.bash"
-else
-    # Installazione manuale
-    warn "Script di installazione non trovato, installazione manuale..."
-    
-    # Copia script principale
-    if [ -f "zram-config" ]; then
-        mkdir -p /usr/local/bin
-        cp zram-config /usr/local/bin/
-        chmod +x /usr/local/bin/zram-config
-        info "✓ Script zram-config copiato"
-    else
-        error "File zram-config non trovato nel repository"
-        exit 1
-    fi
-    
-    # Copia servizio systemd
-    if [ -f "zram-config.service" ]; then
-        cp zram-config.service /etc/systemd/system/
-        systemctl daemon-reload
-        info "✓ Servizio systemd installato"
-    elif [ -f "systemd/zram-config.service" ]; then
-        cp systemd/zram-config.service /etc/systemd/system/
-        systemctl daemon-reload
-        info "✓ Servizio systemd installato"
-    else
-        warn "File zram-config.service non trovato, il servizio potrebbe non funzionare"
-    fi
-    
-    info "✓ Installazione manuale completata"
-fi
-
-# Configurazione personalizzata per ARM NAS
-info "Configurazione zram per ARM NAS..."
-
-# Backup configurazione originale
-if [ -f "/etc/ztab" ] && [ ! -f "/etc/ztab.orig" ]; then
-    cp /etc/ztab /etc/ztab.orig
-    info "Backup configurazione originale in /etc/ztab.orig"
-fi
-
-# Configura /etc/ztab per ARM NAS
-# Swap: 1GB compresso con lzo-rle (massima velocità)
-# Log: 150MB compresso per /var/log con rotation su /opt/zram/oldlog
-cat > /etc/ztab << 'ZTAB'
-# zram configuration for ARM NAS
-# Formato: tipo alg mem_limit disk_size [opzioni specifiche]
-# 
-# Algoritmi disponibili:
-# - lzo-rle: più veloce, compressione decente (raccomandato)
-# - lzo: veloce, compressione simile a lzo-rle
-# - lz4: molto veloce, compressione leggermente inferiore
-# - zstd: più lento, ma miglior compressione (ottimo per testo/log)
-#
-# mem_limit: limite di memoria compressa (hard limit)
-# disk_size: dimensione massima non compressa (circa 150% di mem_limit)
-
-# SWAP: zram swap device (priorità alta)
-# 1GB RAM compressa, max 3GB non compressi
-# Priorità 75 (più alta dello swap su disco)
-# page-cluster 0: ottimizza per pagine singole (bassa latenza)
-# swappiness 150: usa zram più aggressivamente (migliori performance)
-swap	lzo-rle		1G		3G		75		0		150
-
-# LOG: /var/log in zram con rotation automatica
-# 150MB RAM compressa, max 450MB non compressi
-# oldlog_dir: i log vecchi vanno su /opt/zram/oldlog (fuori dalla SD)
-log	lzo-rle		150M		450M		/var/log	/opt/zram/oldlog
-
-# DIRECTORY: Esempi di directory in zram (commentate di default)
-# NON mettere /storage in zram! Deve rimanere disponibile per ZFS
-# Esempi:
-# dir	lzo-rle		50M		150M		/tmp
-# dir	zstd		100M		300M		/var/cache
-
-ZTAB
-
-info "✓ Configurazione /etc/ztab creata"
-info ""
-info "Configurazione zram:"
-info "  - Swap: 1GB RAM compressa (max 3GB non compressi) con priorità 75"
-info "  - Log: 150MB RAM compressa (max 450MB non compressi) in /var/log"
-info "  - Rotation log: log vecchi salvati in /opt/zram/oldlog"
-info "  - /storage: NON in zram (disponibile per pool ZFS)"
+info "Configurazione zram ottimizzata:"
+info "  - Swap: ${SWAP_SIZE}MB"
+info "  - Log: ${LOG_SIZE}MB"
+info "  - Tmp: ${TMP_SIZE}MB"
 echo ""
 
-# Crea directory per log vecchi
-mkdir -p /opt/zram/oldlog
-info "✓ Directory /opt/zram/oldlog creata per log rotation"
+# Backup configurazione esistente
+if [ -f "/etc/systemd/zram-generator.conf" ]; then
+    cp /etc/systemd/zram-generator.conf /etc/systemd/zram-generator.conf.bak
+    info "✓ Backup configurazione esistente"
+fi
 
-# Abilita e avvia servizio
-info "Abilitazione servizio zram-config..."
+# Crea configurazione systemd-zram-generator
+cat > /etc/systemd/zram-generator.conf << EOF
+# ===============================
+# ZRAM configuration for ARM NAS
+# Generato automaticamente per sistema con ${TOTAL_RAM_GB}GB RAM
+# ===============================
+
+# Swap device - comprimi con zstd (miglior rapporto compressione/velocità)
+# Priorità 100 (più alta dello swap su disco)
+[zram0]
+zram-size = ${SWAP_SIZE}
+compression-algorithm = zstd
+swap-priority = 100
+
+# /var/log in RAM compressa
+[zram1]
+zram-size = ${LOG_SIZE}
+compression-algorithm = zstd
+mount-point = /var/log
+
+# /tmp in RAM compressa
+[zram2]
+zram-size = ${TMP_SIZE}
+compression-algorithm = zstd
+mount-point = /tmp
+EOF
+
+info "✓ Configurazione /etc/systemd/zram-generator.conf creata"
+echo ""
+cat /etc/systemd/zram-generator.conf
+echo ""
+
+# Ricarica systemd per applicare la configurazione
+info "Ricaricamento configurazione systemd..."
 systemctl daemon-reload
-systemctl enable zram-config.service || {
-    warn "Impossibile abilitare servizio (potrebbe essere già abilitato)"
-}
 
-# Avvia il servizio
-info "Avvio servizio zram-config..."
-systemctl start zram-config.service || {
-    error "Impossibile avviare servizio zram-config"
-    error "Verifica i log con: journalctl -u zram-config.service"
-    exit 1
-}
+# systemd-zram-generator viene eseguito automaticamente all'avvio
+# Per applicare ora senza riavvio, eseguiamo manualmente
+info "Generazione dispositivi zram..."
 
-# Attendi che il servizio si stabilizzi
+# Esegui generatore (se disponibile)
+if [ -x /usr/lib/systemd/systemd-zram-generator ]; then
+    /usr/lib/systemd/systemd-zram-generator || {
+        warn "Generazione dispositivi fallita, riavvio consigliato"
+    }
+fi
+
+# Attendi stabilizzazione
 sleep 2
 
 # Verifica che zram sia attivo
 info "Verifica stato zram..."
 echo ""
 
+ZRAM_OK=false
+
 if command -v zramctl >/dev/null 2>&1; then
-    if zramctl | grep -q "zram"; then
-        info "✅ zram attivo e funzionante:"
+    if zramctl 2>/dev/null | grep -q "zram"; then
+        info "✅ Dispositivi zram attivi:"
         echo ""
         zramctl
         echo ""
+        ZRAM_OK=true
     else
-        warn "zram installato ma nessun device attivo"
+        warn "⚠️ Nessun dispositivo zram attivo"
+        warn "   Potrebbe essere necessario riavviare per applicare la configurazione"
     fi
 else
-    warn "Comando zramctl non disponibile (installa util-linux)"
+    warn "Comando zramctl non disponibile"
 fi
 
 # Verifica swap
-if swapon --show | grep -q "zram"; then
+if swapon --show 2>/dev/null | grep -q "zram"; then
     info "✅ Swap zram attivo:"
     swapon --show | grep zram
     echo ""
 else
-    warn "Swap zram non trovato"
-fi
-
-# Verifica /var/log
-if mountpoint -q /var/log 2>/dev/null; then
-    LOG_FSTYPE=$(findmnt -n -o FSTYPE /var/log 2>/dev/null || echo "unknown")
-    if echo "$LOG_FSTYPE" | grep -q "overlay"; then
-        info "✅ /var/log montato su zram (overlay):"
-        df -h /var/log | tail -1
-        echo ""
-    else
-        warn "/var/log montato ma non come overlay (tipo: $LOG_FSTYPE)"
+    if [ "$ZRAM_OK" = "false" ]; then
+        warn "⚠️ Swap zram non trovato (riavvio necessario)"
     fi
 fi
+
+# Verifica mount /var/log e /tmp
+for mount_point in /var/log /tmp; do
+    if findmnt "$mount_point" 2>/dev/null | grep -q "zram"; then
+        info "✅ $mount_point montato su zram:"
+        df -h "$mount_point" | tail -1
+    fi
+done
 
 # Informazioni finali
 echo ""
 info "=== Installazione completata ==="
-info ""
-info "Vantaggi di zram-config:"
-info "  ✅ Riduce drasticamente le scritture su SD card"
-info "  ✅ Swap compresso in RAM invece che su disco"
-info "  ✅ Log temporanei in RAM compressa"
+echo ""
+
+if [ "$ZRAM_OK" = "true" ]; then
+    info "✅ systemd-zram-generator installato e configurato"
+    info "   Dispositivi zram attivi e funzionanti"
+else
+    warn "⚠️  systemd-zram-generator installato ma dispositivi non attivi"
+    warn "   Riavvia il sistema per applicare la configurazione:"
+    warn "   sudo reboot"
+fi
+
+echo ""
+info "Vantaggi di zram:"
+info "  ✅ Riduce drasticamente le scritture su SD/SSD (~80%)"
+info "  ✅ Swap compresso in RAM (20-40x più veloce)"
+info "  ✅ /var/log e /tmp in RAM compressa"
 info "  ✅ /storage libero per pool ZFS"
 info ""
 info "Comandi utili:"
-info "  zramctl                    - Mostra dispositivi zram attivi"
-info "  swapon --show              - Mostra swap attivo (incluso zram)"
-info "  df -h                      - Mostra filesystem (incluso zram)"
-info "  systemctl status zram-config - Stato del servizio"
+info "  zramctl                           - Mostra dispositivi zram attivi"
+info "  swapon --show                     - Mostra swap attivo (incluso zram)"
+info "  df -h | grep zram                 - Mostra filesystem zram"
+info "  systemctl status 'systemd-zram*'  - Stato servizi zram"
 info ""
 info "Per modificare la configurazione:"
-info "  1. sudo systemctl stop zram-config"
-info "  2. sudo nano /etc/ztab"
-info "  3. sudo systemctl start zram-config"
+info "  1. sudo nano /etc/systemd/zram-generator.conf"
+info "  2. sudo systemctl daemon-reload"
+info "  3. sudo reboot  # Per applicare modifiche"
 echo ""
 
-# Cleanup
-rm -rf "$ZRAM_REPO_DIR"
-info "✓ File temporanei rimossi"
-
-info "Installazione zram-config completata con successo!"
+info "Installazione systemd-zram-generator completata con successo!"
 
