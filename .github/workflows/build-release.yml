@@ -114,6 +114,14 @@ jobs:
           echo "Package SHA256: $SHA256"
           echo "Package Size: $SIZE bytes"
       
+      - name: Create tag if manual run
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "v${{ steps.get_version.outputs.VERSION }}" -m "Release v${{ steps.get_version.outputs.VERSION }}"
+          git push origin "v${{ steps.get_version.outputs.VERSION }}"
+      
       - name: Create Release Notes
         id: release_notes
         run: |
