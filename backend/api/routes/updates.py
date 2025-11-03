@@ -3,6 +3,7 @@ API Routes per la gestione degli aggiornamenti software
 """
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, BackgroundTasks
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
 import json
@@ -277,15 +278,19 @@ async def upload_update(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class InstallRequest(BaseModel):
+    filename: str
+
+
 @router.post("/install")
 async def install_update(
-    filename: str,
+    request: InstallRequest,
     background_tasks: BackgroundTasks,
     current_admin = Depends(get_current_admin)
 ):
     """Installa un aggiornamento"""
     try:
-        file_path = Path(UPDATE_CONFIG["temp_dir"]) / filename
+        file_path = Path(UPDATE_CONFIG["temp_dir"]) / request.filename
         
         if not file_path.exists():
             raise HTTPException(
@@ -312,7 +317,7 @@ async def install_update(
         return {
             "success": True,
             "message": "Installazione avviata",
-            "filename": filename,
+            "filename": request.filename,
             "note": "L'installazione richiede privilegi elevati. Seguire le istruzioni a schermo."
         }
         
