@@ -439,6 +439,15 @@ else
     exit 1
 fi
 
+# Applica branding Virtual DSM Bare Metal
+info "Applicazione branding Virtual DSM Bare Metal..."
+if [ -f "$REPO_DIR/scripts/branding-vdsm.sh" ]; then
+    bash "$REPO_DIR/scripts/branding-vdsm.sh"
+    info "✓ Branding applicato"
+else
+    warn "Script branding-vdsm.sh non trovato, branding saltato"
+fi
+
 # NOTA: Non configurare overlayfs - usiamo zram-config invece!
 # overlayfs è stato sostituito da zram-config per una migliore protezione della SD card
 # e migliori performance (scritture compresse in RAM invece che overlay complesso)
@@ -1302,6 +1311,15 @@ if [ -f /root/.profile ]; then
     sed -i '/FLAG_FILE/d' /root/.profile 2>/dev/null || true
     sed -i '/ARM NAS - Installazione Automatica/d' /root/.profile 2>/dev/null || true
     sed -i '/INSTALLER=/d' /root/.profile 2>/dev/null || true
+    sed -i '/Installazione già completata/d' /root/.profile 2>/dev/null || true
+    sed -i '/già completata/d' /root/.profile 2>/dev/null || true
+    sed -i '/installer-completed/d' /root/.profile 2>/dev/null || true
+    sed -i '/\/var\/lib\/armnas/d' /root/.profile 2>/dev/null || true
+    sed -i '/rieseguire.*rm.*FLAG/d' /root/.profile 2>/dev/null || true
+    
+    # Rimuovi anche eventuali blocchi if-fi relativi al flag file
+    # Questo è più aggressivo ma sicuro
+    sed -i '/if \[ -f "\$FLAG_FILE" \]/,/^fi$/d' /root/.profile 2>/dev/null || true
     
     # Se .profile è quasi vuoto, ricrealo con versione standard
     if [ $(wc -l < /root/.profile 2>/dev/null || echo 0) -lt 5 ]; then
