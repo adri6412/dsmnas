@@ -96,160 +96,51 @@ info "  ✓ scripts/: $([ -d "$REPO_DIR/scripts" ] && echo 'OK' || echo 'MANCANT
 info "  ✓ config/: $([ -d "$REPO_DIR/config" ] && echo 'OK' || echo 'MANCANTE')"
 
 # Funzione per assicurarsi che /opt/armnas sia sempre scrivibile (rw)
-# Monta /opt/armnas dalla SD originale quando overlayfs è attivo
+# NOTA: Con zram-config, non usiamo più overlayfs sul root filesystem
+# Questa funzione verifica solo che la directory sia scrivibile
 ensure_armnas_rw() {
+    info "Verifica che /opt/armnas sia scrivibile (usando zram-config, non overlayfs)..."
+    
+    # Con zram-config, il root filesystem rimane scrivibile normalmente
+    # Solo swap e log vanno in RAM compressa, non il root filesystem
+    
     local OVERLAY_ACTIVE=false
     local LOWER_ROOT=""
     
-    # Verifica se overlayroot è attivo (crea /media/root-ro)
+    # Verifica comunque se overlayroot è attivo (per compatibilità con vecchie installazioni)
     if [ -d "/media/root-ro" ] && mountpoint -q "/media/root-ro" 2>/dev/null; then
         OVERLAY_ACTIVE=true
         LOWER_ROOT="/media/root-ro"
-        info "Rilevato overlayroot attivo (lower root: $LOWER_ROOT)"
+        warn "ATTENZIONE: overlayroot attivo (lower root: $LOWER_ROOT)"
+        warn "Questo sistema usa ancora overlayfs invece di zram-config"
+        warn "Considera di disabilitare overlayfs e usare solo zram-config"
     # Verifica se ci sono mount overlay attivi sul root filesystem
     elif mount | grep -q "on /.*type overlay"; then
         OVERLAY_ACTIVE=true
-        warn "Rilevato overlayfs attivo su root filesystem"
-        
-        # Prova a trovare il lower filesystem usando findmnt
-        # findmnt mostra i lower directories di overlayfs
-        local ROOT_DEVICE=$(findmnt -n -o SOURCE / 2>/dev/null)
-        if [ -n "$ROOT_DEVICE" ]; then
-            info "Root filesystem device: $ROOT_DEVICE"
-        fi
-        
-        # Prova percorsi comuni per il lower root
-        if [ -d "/media/root-ro" ] && mountpoint -q "/media/root-ro" 2>/dev/null; then
-            LOWER_ROOT="/media/root-ro"
-        elif [ -d "/overlay/root" ] && mountpoint -q "/overlay/root" 2>/dev/null; then
-            LOWER_ROOT="/overlay/root"
-        else
-            # Usa findmnt per trovare il lower directory
-            local LOWER_DIRS=$(findmnt -n -o OPTIONS / 2>/dev/null | grep -oP 'lowerdir=\K[^,]+' | head -1)
-            if [ -n "$LOWER_DIRS" ] && [ -d "$LOWER_DIRS" ]; then
-                LOWER_ROOT="$LOWER_DIRS"
-                info "Trovato lower root tramite findmnt: $LOWER_ROOT"
-            fi
-        fi
+        warn "Questo sistema usa ancora overlayfs invece di zram-config"
     fi
     
-    # Se overlayfs è attivo, monta /opt/armnas dalla SD originale
-    if [ "$OVERLAY_ACTIVE" = "true" ]; then
-        warn "Overlayfs è attivo - assicurando che /opt/armnas sia scrivibile dalla SD originale"
-        
-        if [ -z "$LOWER_ROOT" ] || [ ! -d "$LOWER_ROOT" ]; then
-            error "Overlayfs attivo ma lower root non trovato"
-            error ""
-            error "Tentativo di trovare il dispositivo root originale..."
-            
-            # Prova a trovare il dispositivo root originale
-            local ROOT_SOURCE=$(findmnt -n -o SOURCE / | sed 's/\[.*\]//' | head -1)
-            if [ -n "$ROOT_SOURCE" ] && [ -b "$ROOT_SOURCE" ]; then
-                info "Dispositivo root trovato: $ROOT_SOURCE"
-                
-                # Crea un punto di mount temporaneo
-                local TMP_MOUNT="/tmp/root-original-$$"
-                mkdir -p "$TMP_MOUNT"
-                
-                # Prova a montare il dispositivo (potrebbe fallire se già montato o se è un overlay)
-                if mount "$ROOT_SOURCE" "$TMP_MOUNT" 2>/dev/null; then
-                    LOWER_ROOT="$TMP_MOUNT"
-                    info "Montato root originale su $LOWER_ROOT"
-                else
-                    # Se il mount fallisce, potrebbe essere che il root è già un overlay
-                    # In questo caso, prova a trovare il lower usando findmnt
-                    local LOWER_INFO=$(findmnt -M / -n -o OPTIONS 2>/dev/null)
-                    if echo "$LOWER_INFO" | grep -q "lowerdir="; then
-                        LOWER_ROOT=$(echo "$LOWER_INFO" | grep -oP 'lowerdir=\K[^,]+' | head -1)
-                        info "Lower root trovato tramite findmnt: $LOWER_ROOT"
-                    fi
-                    rmdir "$TMP_MOUNT" 2>/dev/null || true
-                fi
-            fi
-        fi
-        
-        if [ -n "$LOWER_ROOT" ] && [ -d "$LOWER_ROOT" ]; then
-            info "Montaggio /opt/armnas dalla SD originale per renderlo sempre scrivibile..."
-            
-            local LOWER_OPT="$LOWER_ROOT/opt"
-            local LOWER_ARMNAS="$LOWER_ROOT$INSTALL_DIR"
-            
-            # Crea /opt nella SD originale se non esiste
-            if [ ! -d "$LOWER_OPT" ]; then
-                # Per creare nella SD originale, potremmo dover fare un remount rw temporaneo
-                # o creare direttamente se il lower è scrivibile
-                if mount | grep -q "$LOWER_ROOT.*ro,"; then
-                    warn "$LOWER_ROOT è in sola lettura, tentativo remount rw..."
-                    mount -o remount,rw "$LOWER_ROOT" 2>/dev/null || true
-                fi
-                mkdir -p "$LOWER_OPT" 2>/dev/null || warn "Impossibile creare $LOWER_OPT (potrebbe essere normale)"
-            fi
-            
-            # Crea /opt/armnas nella SD originale se non esiste
-            if [ ! -d "$LOWER_ARMNAS" ]; then
-                mkdir -p "$LOWER_ARMNAS" 2>/dev/null || warn "Impossibile creare $LOWER_ARMNAS"
-            fi
-            
-            # Se /opt/armnas non è già montato dalla SD originale, montalo
-            if ! mountpoint -q "$INSTALL_DIR" 2>/dev/null; then
-                # Assicurati che la directory target esista nell'overlay
-                mkdir -p "$INSTALL_DIR"
-                
-                # Monta dalla SD originale usando bind mount
-                if mount --bind "$LOWER_ARMNAS" "$INSTALL_DIR" 2>/dev/null; then
-                    info "✓ Montato $LOWER_ARMNAS su $INSTALL_DIR (sempre scrivibile dalla SD)"
-                else
-                    error "Impossibile montare $LOWER_ARMNAS su $INSTALL_DIR"
-                    error "Verifica i permessi e che $LOWER_ARMNAS esista"
-                fi
-            else
-                # Verifica che sia montato dalla SD originale e non dall'overlay
-                local MOUNT_SOURCE=$(findmnt -n -o SOURCE "$INSTALL_DIR" 2>/dev/null)
-                if echo "$MOUNT_SOURCE" | grep -q "$LOWER_ROOT"; then
-                    info "✓ $INSTALL_DIR già montato dalla SD originale (scrivable)"
-                else
-                    warn "$INSTALL_DIR è montato da: $MOUNT_SOURCE"
-                    warn "Potrebbe non essere dalla SD originale, rimontando..."
-                    umount "$INSTALL_DIR" 2>/dev/null || true
-                    mkdir -p "$INSTALL_DIR"
-                    mount --bind "$LOWER_ARMNAS" "$INSTALL_DIR" 2>/dev/null && \
-                        info "✓ Rimontato $INSTALL_DIR dalla SD originale" || \
-                        error "Impossibile rimontare $INSTALL_DIR dalla SD originale"
-                fi
-            fi
-            
-            # Verifica che sia scrivibile
-            if touch "$INSTALL_DIR/.rw_test" 2>/dev/null; then
-                rm -f "$INSTALL_DIR/.rw_test"
-                info "✓ Verificato: $INSTALL_DIR è scrivibile"
-            else
-                error "ERRORE: $INSTALL_DIR NON è scrivibile dopo il mount!"
-                error "Potrebbe esserci un problema con overlayfs"
-            fi
-        else
-            error "Impossibile trovare il lower filesystem root"
-            error "Overlayfs è attivo ma non è possibile montare /opt/armnas dalla SD originale"
-            error ""
-            error "Soluzioni:"
-            error "  1. Disabilita overlayfs:"
-            error "     sudo $REPO_DIR/scripts/disable-overlayfs.sh"
-            error "     sudo reboot"
-            error "     Poi riesegui questo script"
-            error ""
-            error "  2. Oppure verifica manualmente lo stato di overlayfs:"
-            error "     mount | grep overlay"
-            error "     findmnt /"
-            exit 1
-        fi
+    # Con zram-config, il root filesystem è sempre scrivibile normalmente
+    # Verifica solo che /opt/armnas esista e sia scrivibile
+    if [ "$OVERLAY_ACTIVE" = "false" ]; then
+        info "✅ Sistema configurato correttamente: nessun overlayfs, usando zram-config"
+        info "   Root filesystem scrivibile normalmente, swap/log in RAM compressa"
+    fi
+    
+    # Crea e verifica la directory /opt/armnas
+    mkdir -p "$INSTALL_DIR" 2>/dev/null || {
+        error "Impossibile creare $INSTALL_DIR"
+        exit 1
+    }
+    
+    # Verifica che sia scrivibile
+    if touch "$INSTALL_DIR/.rw_test" 2>/dev/null; then
+        rm -f "$INSTALL_DIR/.rw_test"
+        info "✓ $INSTALL_DIR è scrivibile"
     else
-        # Anche senza overlayfs, assicuriamoci che /opt/armnas esista e sia scrivibile
-        info "Overlayfs non attivo - verificando che /opt/armnas sia scrivibile"
-        if touch "$INSTALL_DIR/.rw_test" 2>/dev/null; then
-            rm -f "$INSTALL_DIR/.rw_test"
-            info "✓ $INSTALL_DIR è scrivibile"
-        else
-            warn "$INSTALL_DIR non è scrivibile - potrebbe essere un problema di permessi"
-        fi
+        error "ERRORE: $INSTALL_DIR NON è scrivibile!"
+        error "Verifica i permessi e lo spazio disponibile"
+        exit 1
     fi
 }
 
@@ -539,8 +430,25 @@ EOF
 info "Configurazione zram-config per ridurre scritture su SD..."
 info "Riferimento: https://github.com/ecdye/zram-config"
 
-# Installa zram-config dal repository GitHub
-# Verifica se zram-config è già installato
+# Installa zram-config usando lo script dedicato
+if [ -f "$REPO_DIR/scripts/install-zram-config.sh" ]; then
+    info "Esecuzione script di installazione zram-config..."
+    bash "$REPO_DIR/scripts/install-zram-config.sh"
+else
+    error "Script install-zram-config.sh non trovato in $REPO_DIR/scripts/"
+    exit 1
+fi
+
+# NOTA: Non configurare overlayfs - usiamo zram-config invece!
+# overlayfs è stato sostituito da zram-config per una migliore protezione della SD card
+# e migliori performance (scritture compresse in RAM invece che overlay complesso)
+
+# Il resto della configurazione overlayfs è stato rimosso - ora si usa zram-config
+# Se necessario in futuro, la configurazione overlayfs può essere aggiunta manualmente
+
+# Saltiamo la configurazione overlayfs precedente
+if false; then
+# Codice overlayfs rimosso - mantenuto solo per riferimento storico
 cat > /usr/local/bin/setup-overlayfs.sh << 'OVERLAYEOF'
 #!/bin/bash
 # Script per configurare overlayfs al boot
@@ -1351,6 +1259,13 @@ fi
 
 info "/opt/armnas e /storage saranno sempre scrivibili sulla SD, anche con overlayfs attivo."
 info "Il servizio bind-armnas.service si avvia automaticamente all'avvio del sistema."
+fi  # Fine blocco if false - codice overlayfs disabilitato
+
+info "✅ Sistema configurato per usare zram-config invece di overlayfs"
+info "   - Swap compresso in RAM (riduce scritture su SD)"
+info "   - Log in RAM compressa (/var/log)"
+info "   - /storage disponibile per pool ZFS"
+info "   - Nessun overlay sul root filesystem"
 
 # Ottieni l'indirizzo IP
 IP_ADDRESS=$(hostname -I | awk '{print $1}')
