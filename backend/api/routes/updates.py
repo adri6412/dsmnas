@@ -34,13 +34,21 @@ UPDATE_CONFIG = {
 }
 
 # Leggi la versione corrente dal file VERSION
-VERSION_FILE = Path(__file__).parent.parent.parent.parent / "VERSION"
+# Prova prima in /opt/armnas/VERSION (produzione), poi percorso relativo (sviluppo)
+VERSION_FILE_PROD = Path("/opt/armnas/VERSION")
+VERSION_FILE_DEV = Path(__file__).parent.parent.parent.parent / "VERSION"
+
+VERSION_FILE = VERSION_FILE_PROD if VERSION_FILE_PROD.exists() else VERSION_FILE_DEV
+
 if VERSION_FILE.exists():
     try:
         with open(VERSION_FILE, 'r') as f:
             UPDATE_CONFIG["current_version"] = f.read().strip()
+            logger.info(f"Versione letta da {VERSION_FILE}: {UPDATE_CONFIG['current_version']}")
     except Exception as e:
         logger.warning(f"Impossibile leggere il file VERSION: {e}")
+else:
+    logger.warning(f"File VERSION non trovato in {VERSION_FILE_PROD} o {VERSION_FILE_DEV}")
 
 # Crea directory temporanea se non esiste
 Path(UPDATE_CONFIG["temp_dir"]).mkdir(parents=True, exist_ok=True)
