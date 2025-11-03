@@ -294,8 +294,15 @@ async def update_virtual_dsm_config(config: VirtualDSMConfig, current_admin = De
             else:
                 if var_value:
                     # Aggiungi la variabile nella sezione environment
-                    env_pattern = r'(environment:\s*\n)'
-                    if re.search(env_pattern, content):
+                    # Prima verifica se environment: esiste con o senza newline
+                    env_pattern_with_newline = r'(environment:\s*\n)'
+                    env_pattern_no_newline = r'(environment:)(\s*)(\S)'
+                    
+                    if re.search(env_pattern_no_newline, content):
+                        # environment: seguito direttamente da altro (senza newline)
+                        # Aggiungi newline e la variabile
+                        content = re.sub(env_pattern_no_newline, rf'\1\n{replacement}\3', content, count=1)
+                    elif re.search(env_pattern_with_newline, content):
                         # Trova l'ultima variabile d'ambiente in formato array
                         env_section_match = re.search(r'(environment:\s*\n)((\s+-\s+[A-Z_]+=.*\n)+)', content)
                         if env_section_match:
@@ -304,7 +311,7 @@ async def update_virtual_dsm_config(config: VirtualDSMConfig, current_admin = De
                             content = content[:insert_pos] + replacement + content[insert_pos:]
                         else:
                             # Non ci sono altre variabili, aggiungi dopo environment:
-                            content = re.sub(env_pattern, rf'\1{replacement}', content, count=1)
+                            content = re.sub(env_pattern_with_newline, rf'\1{replacement}', content, count=1)
                     else:
                         # Crea la sezione environment
                         services_pattern = r'(virtual-dsm:\s*\n\s+image:\s+vdsm/virtual-dsm\s*\n)'
