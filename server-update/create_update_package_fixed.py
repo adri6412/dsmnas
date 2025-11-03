@@ -389,71 +389,98 @@ fi
 if [[ -d "frontend" ]]; then
     log "🌐 Aggiornamento frontend..."
     
-    # Backup del frontend esistente
-    if [[ -d "$INSTALL_DIR/frontend" ]]; then
-        log "  💾 Backup frontend esistente..."
-        mv "$INSTALL_DIR/frontend" "$TEMP_CONFIG_DIR/frontend_backup"
-    fi
-    
-    # Copia il nuovo codice sorgente
-    log "  📁 Copia codice sorgente frontend..."
-    cp -r frontend "$INSTALL_DIR/" || handle_error "Errore nella copia del frontend"
-    
-    # Prova a ricompilare il frontend sul server
-    log "  🔨 Ricompilazione frontend sul server..."
-    cd "$INSTALL_DIR/frontend"
-    
-    # Verifica se npm è disponibile
-    if command -v npm >/dev/null 2>&1; then
-        log "  📦 Installazione dipendenze npm..."
-        npm install --production=false 2>/dev/null || {
-            log "  ⚠️  Errore nell'installazione dipendenze npm"
-            # Prova con yarn se disponibile
-            if command -v yarn >/dev/null 2>&1; then
-                log "  🧶 Tentativo con yarn..."
-                yarn install 2>/dev/null || log "  ⚠️  Errore anche con yarn"
-            fi
-        }
+    # Verifica se esiste frontend/dist precompilato
+    if [[ -d "frontend/dist" && -f "frontend/dist/index.html" ]]; then
+        log "  ✅ Trovato frontend precompilato"
         
-        log "  🏗️  Build di produzione..."
-        npm run build 2>/dev/null || {
-            log "  ⚠️  Errore nella build npm"
-            # Se la build fallisce, usa il dist precompilato se disponibile
-            if [[ -d "dist" ]]; then
-                log "  📦 Uso frontend precompilato come fallback"
-            else
-                log "  ❌ Nessun frontend disponibile!"
-                # Ripristina il backup se disponibile
-                if [[ -d "$TEMP_CONFIG_DIR/frontend_backup" ]]; then
-                    log "  🔄 Ripristino frontend precedente..."
-                    rm -rf "$INSTALL_DIR/frontend"
-                    mv "$TEMP_CONFIG_DIR/frontend_backup" "$INSTALL_DIR/frontend"
-                fi
-            fi
-        }
-        
-        # Verifica che la build sia riuscita
-        if [[ -d "$INSTALL_DIR/frontend/dist" ]]; then
-            log "  ✅ Frontend ricompilato con successo"
-            # Pulisci node_modules per risparmiare spazio (opzionale)
-            # rm -rf "$INSTALL_DIR/frontend/node_modules"
-        else
-            log "  ⚠️  Build frontend non riuscita, mantengo il codice sorgente"
+        # Backup del frontend esistente
+        if [[ -d "$INSTALL_DIR/frontend" ]]; then
+            log "  💾 Backup frontend esistente..."
+            rm -rf "$INSTALL_DIR/frontend.backup"
+            mv "$INSTALL_DIR/frontend" "$INSTALL_DIR/frontend.backup"
         fi
+        
+        # Crea directory frontend
+        mkdir -p "$INSTALL_DIR/frontend"
+        
+        # Copia SOLO i file compilati da frontend/dist/ a /opt/armnas/frontend/
+        log "  📦 Copia frontend compilato..."
+        cp -r frontend/dist/* "$INSTALL_DIR/frontend/" || handle_error "Errore nella copia del frontend"
+        
+        log "  ✅ Frontend aggiornato (precompilato)"
     else
-        log "  ⚠️  npm non disponibile, impossibile ricompilare"
-        log "  💡 Il frontend dovrà essere compilato manualmente"
+        log "  ⚠️  Frontend precompilato non trovato, provo a compilare sul server..."
         
-        # Se c'è un dist precompilato, usalo
-        if [[ -d "$INSTALL_DIR/frontend/dist" ]]; then
-            log "  📦 Uso frontend precompilato incluso nel pacchetto"
-        else
-            log "  ❌ Nessun frontend compilato disponibile!"
+        # Backup del frontend esistente
+        if [[ -d "$INSTALL_DIR/frontend" ]]; then
+            log "  💾 Backup frontend esistente..."
+            rm -rf "$INSTALL_DIR/frontend.backup"
+            mv "$INSTALL_DIR/frontend" "$INSTALL_DIR/frontend.backup"
         fi
+        
+        # Copia codice sorgente in directory temporanea
+        TEMP_FRONTEND_DIR="/tmp/armnas_frontend_build_$$"
+        log "  📁 Copia codice sorgente in $TEMP_FRONTEND_DIR..."
+        cp -r frontend "$TEMP_FRONTEND_DIR" || handle_error "Errore nella copia del frontend"
+        
+        cd "$TEMP_FRONTEND_DIR"
+        
+        # Prova a compilare
+        if command -v npm >/dev/null 2>&1; then
+            log "  📦 Installazione dipendenze npm..."
+            npm install --production=false || {
+                log "  ❌ Errore installazione dipendenze"
+                # Ripristina backup
+                if [[ -d "$INSTALL_DIR/frontend.backup" ]]; then
+                    mv "$INSTALL_DIR/frontend.backup" "$INSTALL_DIR/frontend"
+                fi
+                rm -rf "$TEMP_FRONTEND_DIR"
+                handle_error "Impossibile installare dipendenze npm"
+            }
+            
+            log "  🏗️  Build di produzione..."
+            npm run build || {
+                log "  ❌ Errore nella build"
+                # Ripristina backup
+                if [[ -d "$INSTALL_DIR/frontend.backup" ]]; then
+                    mv "$INSTALL_DIR/frontend.backup" "$INSTALL_DIR/frontend"
+                fi
+                rm -rf "$TEMP_FRONTEND_DIR"
+                handle_error "Impossibile compilare il frontend"
+            }
+            
+            # Copia i file compilati
+            if [[ -d "dist" && -f "dist/index.html" ]]; then
+                log "  📦 Copia frontend compilato..."
+                mkdir -p "$INSTALL_DIR/frontend"
+                cp -r dist/* "$INSTALL_DIR/frontend/" || handle_error "Errore nella copia del frontend compilato"
+                log "  ✅ Frontend compilato e installato"
+            else
+                log "  ❌ Build non ha prodotto file dist/"
+                # Ripristina backup
+                if [[ -d "$INSTALL_DIR/frontend.backup" ]]; then
+                    mv "$INSTALL_DIR/frontend.backup" "$INSTALL_DIR/frontend"
+                fi
+                rm -rf "$TEMP_FRONTEND_DIR"
+                handle_error "Frontend non compilato correttamente"
+            fi
+        else
+            log "  ❌ npm non disponibile"
+            # Ripristina backup
+            if [[ -d "$INSTALL_DIR/frontend.backup" ]]; then
+                mv "$INSTALL_DIR/frontend.backup" "$INSTALL_DIR/frontend"
+            fi
+            rm -rf "$TEMP_FRONTEND_DIR"
+            handle_error "npm non disponibile per compilare il frontend"
+        fi
+        
+        # Pulizia
+        cd - >/dev/null
+        rm -rf "$TEMP_FRONTEND_DIR"
     fi
     
-    # Torna alla directory di installazione
-    cd - >/dev/null
+    # Rimuovi backup se tutto ok
+    rm -rf "$INSTALL_DIR/frontend.backup"
 else
     log "  ⚠️  Nessun aggiornamento frontend nel pacchetto"
 fi
