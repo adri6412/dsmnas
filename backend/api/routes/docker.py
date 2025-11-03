@@ -213,21 +213,29 @@ async def get_virtual_dsm_config(current_admin = Depends(get_current_admin)):
         # Estrae le variabili d'ambiente dalla configurazione
         config = {}
         
-        # DISK_SIZE
-        match = re.search(r'DISK_SIZE:\s*"([^"]+)"', content)
-        config["disk_size"] = match.group(1) if match else "256G"
+        # DISK_SIZE - supporta sia formato vecchio che array
+        match = re.search(r'-\s*DISK_SIZE=([^\n]+)', content)
+        if not match:
+            match = re.search(r'DISK_SIZE:\s*"?([^"\n]+)"?', content)
+        config["disk_size"] = match.group(1).strip() if match else "256G"
         
         # HOST_SERIAL
-        match = re.search(r'HOST_SERIAL:\s*"([^"]+)"', content)
-        config["host_serial"] = match.group(1) if match else ""
+        match = re.search(r'-\s*HOST_SERIAL=([^\n]+)', content)
+        if not match:
+            match = re.search(r'HOST_SERIAL:\s*"?([^"\n]+)"?', content)
+        config["host_serial"] = match.group(1).strip() if match else ""
         
         # GUEST_SERIAL
-        match = re.search(r'GUEST_SERIAL:\s*"([^"]+)"', content)
-        config["guest_serial"] = match.group(1) if match else ""
+        match = re.search(r'-\s*GUEST_SERIAL=([^\n]+)', content)
+        if not match:
+            match = re.search(r'GUEST_SERIAL:\s*"?([^"\n]+)"?', content)
+        config["guest_serial"] = match.group(1).strip() if match else ""
         
         # VM_NET_MAC
-        match = re.search(r'VM_NET_MAC:\s*"([^"]+)"', content)
-        config["vm_net_mac"] = match.group(1) if match else ""
+        match = re.search(r'-\s*VM_NET_MAC=([^\n]+)', content)
+        if not match:
+            match = re.search(r'VM_NET_MAC:\s*"?([^"\n]+)"?', content)
+        config["vm_net_mac"] = match.group(1).strip() if match else ""
         
         return config
     
@@ -260,29 +268,36 @@ async def update_virtual_dsm_config(config: VirtualDSMConfig, current_admin = De
         
         # Funzione helper per aggiornare/aggiungere una variabile d'ambiente
         def update_env_var(content, var_name, var_value):
-            # Pattern per trovare la variabile (con indentation)
-            pattern = rf'(\s+){var_name}:\s*["\']?[^"\']*["\']?\s*\n'
+            # Usa sintassi array per environment (formato: - VAR=value)
+            # Pattern per trovare la variabile in formato array
+            pattern_array = rf'(\s+)-\s*{var_name}=.*\n'
+            # Pattern per trovare la variabile in formato vecchio
+            pattern_old = rf'(\s+){var_name}:\s*["\']?[^"\']*["\']?\s*\n'
             
             if var_value:
-                replacement = f'      {var_name}: "{var_value}"\n'
+                replacement = f'      - {var_name}={var_value}\n'
             else:
                 replacement = ""
             
-            # Cerca se la variabile esiste già
-            if re.search(pattern, content):
+            # Rimuovi formato vecchio se esiste
+            if re.search(pattern_old, content):
+                content = re.sub(pattern_old, '', content)
+            
+            # Cerca se la variabile esiste già in formato array
+            if re.search(pattern_array, content):
                 if var_value:
                     # Sostituisci il valore esistente
-                    content = re.sub(pattern, replacement, content)
+                    content = re.sub(pattern_array, replacement, content)
                 else:
                     # Rimuovi la riga se il valore è vuoto
-                    content = re.sub(pattern, '', content)
+                    content = re.sub(pattern_array, '', content)
             else:
                 if var_value:
                     # Aggiungi la variabile nella sezione environment
                     env_pattern = r'(environment:\s*\n)'
                     if re.search(env_pattern, content):
-                        # Trova l'ultima variabile d'ambiente nella sezione environment
-                        env_section_match = re.search(r'(environment:\s*\n)((\s+[A-Z_]+:\s*"[^"]*"\s*\n)+)', content)
+                        # Trova l'ultima variabile d'ambiente in formato array
+                        env_section_match = re.search(r'(environment:\s*\n)((\s+-\s+[A-Z_]+=.*\n)+)', content)
                         if env_section_match:
                             # Aggiungi dopo l'ultima variabile esistente
                             insert_pos = env_section_match.end()
