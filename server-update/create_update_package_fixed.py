@@ -519,6 +519,13 @@ for script in *.sh; do
     fi
 done
 
+# Copia anche updater_service.py se esiste
+if [[ -f "backend/updater_service.py" ]]; then
+    log "🔄 Aggiornamento updater service..."
+    cp "backend/updater_service.py" "$INSTALL_DIR/backend/" || handle_error "Errore nell'aggiornamento updater service"
+    log "  ✅ Updater service aggiornato"
+fi
+
 # Aggiorna Configurazioni
 log "⚙️  Aggiornamento configurazioni..."
 for conf in *.conf; do

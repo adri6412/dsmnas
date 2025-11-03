@@ -227,6 +227,12 @@ import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { useToast } from 'vue-toast-notification'
 
+// Axios separato per servizio updater (porta 8001)
+const updaterAxios = axios.create({
+  baseURL: `http://${window.location.hostname}:8001`,
+  timeout: 30000
+})
+
 export default {
   name: 'UpdateManagement',
   setup() {
@@ -255,11 +261,18 @@ export default {
     // Methods
     const loadSystemStatus = async () => {
       try {
-        const response = await axios.get('/api/updates/status')
-        systemStatus.value = response.data
+        // Usa il servizio updater separato (porta 8001)
+        const response = await updaterAxios.get('/status')
+        systemStatus.value.current_version = response.data.current_version
       } catch (error) {
         console.error('Errore nel caricamento dello stato del sistema:', error)
-        toast.error('Errore nel caricamento dello stato del sistema')
+        // Fallback su backend principale
+        try {
+          const response = await axios.get('/api/updates/status')
+          systemStatus.value = response.data
+        } catch (err) {
+          toast.error('Errore nel caricamento dello stato del sistema')
+        }
       }
     }
     
@@ -281,7 +294,8 @@ export default {
         const formData = new FormData()
         formData.append('file', selectedFile.value)
         
-        await axios.post('/api/updates/upload', formData, {
+        // Usa servizio updater (porta 8001)
+        await updaterAxios.post('/upload', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
@@ -314,7 +328,8 @@ export default {
       showInstallModal.value = false
       
       try {
-        const response = await axios.post('/api/updates/install', {
+        // Usa servizio updater (porta 8001)
+        const response = await updaterAxios.post('/install', {
           filename: pendingInstallFile.value
         })
         
@@ -322,7 +337,7 @@ export default {
           duration: 5000
         })
         
-        toast.info('⏳ L\'aggiornamento è in corso (2-5 minuti). Ricarica la pagina tra qualche minuto per vedere la nuova versione.', {
+        toast.info('⏳ L\'aggiornamento è in corso (2-5 minuti). La versione si aggiornerà automaticamente al termine.', {
           duration: 0,
           position: 'top'
         })
@@ -343,7 +358,8 @@ export default {
     
     const loadDownloadedUpdates = async () => {
       try {
-        const response = await axios.get('/api/updates/downloads')
+        // Usa servizio updater (porta 8001)
+        const response = await updaterAxios.get('/downloads')
         downloadedUpdates.value = response.data.updates || []
       } catch (error) {
         console.error('Errore nel caricamento degli aggiornamenti scaricati:', error)
@@ -354,7 +370,8 @@ export default {
       if (!confirm(`Vuoi eliminare ${filename}?`)) return
       
       try {
-        await axios.delete(`/api/updates/downloads/${filename}`)
+        // Usa servizio updater (porta 8001)
+        await updaterAxios.delete(`/downloads/${filename}`)
         toast.success('File eliminato')
         await loadDownloadedUpdates()
       } catch (error) {
@@ -365,7 +382,8 @@ export default {
     
     const loadBackups = async () => {
       try {
-        const response = await axios.get('/api/updates/backups')
+        // Usa servizio updater (porta 8001)
+        const response = await updaterAxios.get('/backups')
         backups.value = response.data.backups || []
       } catch (error) {
         console.error('Errore nel caricamento dei backup:', error)
@@ -403,7 +421,8 @@ export default {
       if (!confirm(`Vuoi eliminare il backup ${filename}?`)) return
       
       try {
-        await axios.delete(`/api/updates/backups/${filename}`)
+        // Usa servizio updater (porta 8001)
+        await updaterAxios.delete(`/backups/${filename}`)
         toast.success('Backup eliminato')
         await loadBackups()
       } catch (error) {
