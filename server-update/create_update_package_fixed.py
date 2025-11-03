@@ -186,6 +186,17 @@ class UpdatePackageBuilder:
         for compose_file in source_path.glob("docker-compose*.yml"):
             print(f"  🐳 {compose_file.name}")
             shutil.copy2(compose_file, package_dir)
+        
+        # File VERSION
+        version_file = source_path / "VERSION"
+        if version_file.exists():
+            print(f"  📋 VERSION file")
+            shutil.copy2(version_file, package_dir)
+        else:
+            # Crea il file VERSION con la versione del pacchetto
+            print(f"  📋 Creazione VERSION file con versione {self.version}")
+            with open(package_dir / "VERSION", 'w') as f:
+                f.write(self.version + '\n')
     
     def _create_metadata(self, package_dir, changelog, critical):
         """Crea il file metadata.json"""
@@ -528,6 +539,16 @@ for compose in docker-compose*.yml; do
         log "  ✅ Copiato $compose"
     fi
 done
+
+# Aggiorna file VERSION
+log "📋 Aggiornamento file VERSION..."
+if [[ -f "VERSION" ]]; then
+    cp "VERSION" "$INSTALL_DIR/" || handle_error "Errore nell'aggiornamento del file VERSION"
+    NEW_VERSION=$(cat VERSION)
+    log "  ✅ Versione aggiornata a: $NEW_VERSION"
+else
+    log "  ⚠️  File VERSION non trovato nel pacchetto"
+fi
 
 # Ripristina configurazioni critiche
 log "🔄 Ripristino configurazioni..."
