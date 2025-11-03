@@ -159,7 +159,7 @@
               </p>
               
               <div v-if="backups.length === 0" class="text-center py-3">
-                <font-awesome-icon icon="folder-open" class="text-muted" size="2x" class="mb-2" />
+                <font-awesome-icon icon="folder-open" class="text-muted mb-2" size="2x" />
                 <p class="text-muted">Nessun backup disponibile</p>
               </div>
               
