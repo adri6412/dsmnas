@@ -440,6 +440,11 @@ export default {
       await loadSystemStatus()
       await loadDownloadedUpdates()
       await loadBackups()
+      
+      // Ricarica la versione ogni 10 secondi per rilevare aggiornamenti
+      setInterval(async () => {
+        await loadSystemStatus()
+      }, 10000)
     })
     
     return {
