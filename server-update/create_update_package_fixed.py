@@ -41,6 +41,7 @@ class UpdatePackageBuilder:
             
             self._copy_source_files(source_dir, package_dir)
             self._create_metadata(package_dir, changelog, critical)
+            self._create_install_script(package_dir)
             
             # 2. Crea l'archivio
             archive_path = self._create_archive(package_dir)
