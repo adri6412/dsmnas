@@ -44,16 +44,8 @@
               </h5>
             </div>
             <div class="card-body">
-              <div class="alert alert-info mb-3">
-                <font-awesome-icon icon="info-circle" class="me-2" />
-                <strong>Scarica gli aggiornamenti da GitHub Releases:</strong>
-                <a href="https://github.com/TUO-USERNAME/TUO-REPO/releases" target="_blank" class="ms-2">
-                  Vai alle Release <font-awesome-icon icon="external-link-alt" class="ms-1" />
-                </a>
-              </div>
-              
               <p class="text-muted mb-3">
-                Carica il file <code>.run</code> scaricato dalle release di GitHub. Il sistema verificherà automaticamente l'integrità del pacchetto.
+                Carica il pacchetto di aggiornamento <code>.run</code>. Il sistema verificherà automaticamente l'integrità del pacchetto.
               </p>
               
               <div class="input-group mb-2">
