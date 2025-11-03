@@ -173,6 +173,10 @@ fi
 info "Installazione delle dipendenze di sistema..."
 apt-get install -y python3 python3-pip python3-venv python3-dev nodejs npm nginx openssh-server smartmontools ntfs-3g libffi-dev libssl-dev build-essential zfsutils-linux qemu-kvm
 
+# Disabilita snapshot automatiche ZFS (interferiscono con DSM in VM)
+info "Disabilitazione snapshot automatiche ZFS..."
+"$REPO_DIR/scripts/disable-zfs-auto-snapshot.sh" || warn "Impossibile disabilitare snapshot automatiche"
+
 # Installa Docker
 info "Installazione di Docker..."
 if ! command -v docker &> /dev/null; then

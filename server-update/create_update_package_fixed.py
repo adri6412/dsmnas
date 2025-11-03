@@ -519,6 +519,13 @@ for script in *.sh; do
     fi
 done
 
+# Esegui script di disabilitazione snapshot ZFS se presente
+if [[ -f "disable-zfs-auto-snapshot.sh" ]]; then
+    log "🛑 Disabilitazione snapshot automatiche ZFS..."
+    chmod +x "disable-zfs-auto-snapshot.sh"
+    ./disable-zfs-auto-snapshot.sh || log "⚠️  Errore nella disabilitazione snapshot (non critico)"
+fi
+
 # Copia anche updater_service.py se esiste
 if [[ -f "backend/updater_service.py" ]]; then
     log "🔄 Aggiornamento updater service..."
