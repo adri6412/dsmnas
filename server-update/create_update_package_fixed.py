@@ -153,15 +153,28 @@ class UpdatePackageBuilder:
         else:
             print(f"  ❌ Directory frontend non trovata: {frontend_src}")
         
-        # Script di sistema - COPIA TUTTI gli script .sh dalla root
+        # Script di sistema - COPIA TUTTI gli script .sh dalla root E da scripts/
         print("  📜 Copia script di sistema...")
         script_count = 0
+        
+        # Script dalla root del progetto
         for script_file in source_path.glob("*.sh"):
-            print(f"    📜 {script_file.name}")
+            print(f"    📜 {script_file.name} (root)")
             shutil.copy2(script_file, package_dir)
             # Rendi eseguibile
             os.chmod(package_dir / script_file.name, 0o755)
             script_count += 1
+        
+        # Script dalla directory scripts/
+        scripts_dir = source_path / "scripts"
+        if scripts_dir.exists():
+            for script_file in scripts_dir.glob("*.sh"):
+                print(f"    📜 {script_file.name} (scripts/)")
+                shutil.copy2(script_file, package_dir)
+                # Rendi eseguibile
+                os.chmod(package_dir / script_file.name, 0o755)
+                script_count += 1
+        
         print(f"    ✅ Script copiati: {script_count}")
         
         # File di configurazione dalla root
