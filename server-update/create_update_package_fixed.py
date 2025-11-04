@@ -598,12 +598,21 @@ if ls *.service 1> /dev/null 2>&1; then
     systemctl daemon-reload || log "⚠️  Errore ricarica systemd"
 fi
 
-# Aggiorna Docker Compose files
-log "🐳 Aggiornamento docker compose..."
+# Aggiorna Docker Compose files (preserva configurazioni utente)
+log "🐳 Verifica docker compose..."
 for compose in docker-compose*.yml; do
     if [[ -f "$compose" ]]; then
-        cp "$compose" "$INSTALL_DIR/" || handle_error "Errore nell'aggiornamento dei file docker compose"
-        log "  ✅ Copiato $compose"
+        # Verifica se il file esiste già (configurazione utente)
+        if [[ -f "$INSTALL_DIR/$compose" ]]; then
+            log "  ⚠️  $compose già esistente - preservato (contiene configurazioni utente)"
+            # Salva il nuovo template come .example
+            cp "$compose" "$INSTALL_DIR/${compose}.example" || log "⚠️  Errore salvataggio template"
+            log "  📋 Nuovo template salvato come ${compose}.example"
+        else
+            # File non esiste, copia normalmente
+            cp "$compose" "$INSTALL_DIR/" || handle_error "Errore nella copia di $compose"
+            log "  ✅ Copiato $compose"
+        fi
     fi
 done
 
