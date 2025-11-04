@@ -526,6 +526,13 @@ if [[ -f "disable-zfs-auto-snapshot.sh" ]]; then
     ./disable-zfs-auto-snapshot.sh || log "⚠️  Errore nella disabilitazione snapshot (non critico)"
 fi
 
+# Esegui fix Docker storage driver se presente
+if [[ -f "fix-docker-storage-driver.sh" ]]; then
+    log "🐳 Verifica e correzione Docker storage driver..."
+    chmod +x "fix-docker-storage-driver.sh"
+    ./fix-docker-storage-driver.sh --auto || log "⚠️  Fix Docker storage driver non applicato (potrebbe non essere necessario)"
+fi
+
 # Copia anche updater_service.py se esiste
 if [[ -f "backend/updater_service.py" ]]; then
     log "🔄 Aggiornamento updater service..."

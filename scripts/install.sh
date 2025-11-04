@@ -185,11 +185,35 @@ if ! command -v docker &> /dev/null; then
     sh get-docker.sh
     rm get-docker.sh
     
+    # Configura Docker con overlay2 storage driver (NON zfs per evitare snapshot automatiche)
+    info "Configurazione Docker storage driver (overlay2)..."
+    mkdir -p /etc/docker
+    cat > /etc/docker/daemon.json << 'DOCKEREOF'
+{
+  "storage-driver": "overlay2",
+  "data-root": "/storage/docker"
+}
+DOCKEREOF
+    
     # Avvia Docker e configura l'avvio automatico
     systemctl enable docker
     systemctl start docker
 else
     info "Docker è già installato"
+    
+    # Verifica e correggi storage driver se necessario
+    DOCKER_DRIVER=$(docker info 2>/dev/null | grep "Storage Driver" | awk '{print $3}' || echo "unknown")
+    if [ "$DOCKER_DRIVER" = "zfs" ]; then
+        warn "Docker usa storage driver ZFS (crea snapshot automatiche)"
+        info "Correzione storage driver a overlay2..."
+        
+        # Esegui script di fix se disponibile
+        if [ -f "$REPO_DIR/scripts/fix-docker-storage-driver.sh" ]; then
+            bash "$REPO_DIR/scripts/fix-docker-storage-driver.sh" --auto || warn "Fix storage driver fallito"
+        fi
+    elif [ "$DOCKER_DRIVER" = "overlay2" ]; then
+        info "✓ Docker storage driver già configurato correttamente (overlay2)"
+    fi
 fi
 
 # Installa Docker Compose se non è disponibile
