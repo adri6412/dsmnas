@@ -2,7 +2,7 @@
 Description=ArmNAS Auto-Update Service
 Documentation=https://github.com/adri6412/dsmnas
 After=network.target local-fs.target
-Before=armnas-backend.service nginx.service
+Before=armnas-backend.service
 ConditionPathExists=/opt/armnas/pending-updates
 
 [Service]
