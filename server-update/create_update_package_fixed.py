@@ -731,6 +731,14 @@ echo ""
 log "🔄 Per riavviare: Dashboard → Riavvia oppure 'reboot'"
 echo ""
 
+# Pulizia file .run dalla directory pending-updates
+log "🧹 Pulizia pending-updates..."
+if [[ -d "$INSTALL_DIR/pending-updates" ]]; then
+    # Rimuovi TUTTI i file .run dalla directory pending-updates
+    rm -f "$INSTALL_DIR/pending-updates"/*.run 2>/dev/null || true
+    log "✅ File .run rimossi da pending-updates"
+fi
+
 exit 0
 '''
         
