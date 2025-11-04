@@ -532,19 +532,16 @@ for script in *.sh; do
     fi
 done
 
-# Esegui script di disabilitazione snapshot ZFS se presente
-if [[ -f "disable-zfs-auto-snapshot.sh" ]]; then
-    log "🛑 Disabilitazione snapshot automatiche ZFS..."
-    chmod +x "disable-zfs-auto-snapshot.sh"
-    ./disable-zfs-auto-snapshot.sh || log "⚠️  Errore nella disabilitazione snapshot (non critico)"
-fi
-
-# Esegui fix Docker storage driver se presente
-if [[ -f "fix-docker-storage-driver.sh" ]]; then
-    log "🐳 Verifica e correzione Docker storage driver..."
-    chmod +x "fix-docker-storage-driver.sh"
-    ./fix-docker-storage-driver.sh --auto || log "⚠️  Fix Docker storage driver non applicato (potrebbe non essere necessario)"
-fi
+# Nota: Gli script fix-docker-storage-driver.sh e disable-zfs-auto-snapshot.sh
+# sono stati copiati in /opt/armnas/ ma NON vengono eseguiti automaticamente.
+# Sono disponibili per esecuzione manuale se necessario:
+#   - disable-zfs-auto-snapshot.sh: disabilita snapshot automatiche ZFS (eseguito solo in install.sh)
+#   - fix-docker-storage-driver.sh: cambia Docker da ZFS a overlay2 (già applicato in v0.2.4)
+# 
+# Dalla v0.2.4 in poi, tutte le nuove installazioni hanno già:
+#   - Docker configurato con overlay2 storage driver
+#   - Snapshot automatiche ZFS disabilitate
+# Quindi questi script non sono più necessari per aggiornamenti futuri.
 
 # Copia anche updater_service.py se esiste
 if [[ -f "backend/updater_service.py" ]]; then
