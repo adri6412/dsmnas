@@ -532,9 +532,9 @@ for script in *.sh; do
     fi
 done
 
-# Esegui fix nginx systemd SOLO per v0.2.4 (sistemi esistenti con problema blocco)
+# Esegui fix nginx systemd SOLO per v0.2.5 (sistemi esistenti con problema blocco)
 if [[ -f "fix-nginx-systemd.sh" ]]; then
-    log "🔧 Fix nginx systemd service (solo v0.2.4)..."
+    log "🔧 Fix nginx systemd service (v0.2.5)..."
     chmod +x "fix-nginx-systemd.sh"
     ./fix-nginx-systemd.sh || log "⚠️  Fix nginx non applicato (potrebbe non essere necessario)"
 fi
@@ -543,10 +543,10 @@ fi
 # sono stati copiati in /opt/armnas/ ma NON vengono eseguiti automaticamente.
 # Sono disponibili per esecuzione manuale se necessario:
 #   - disable-zfs-auto-snapshot.sh: disabilita snapshot automatiche ZFS (eseguito solo in install.sh)
-#   - fix-docker-storage-driver.sh: cambia Docker da ZFS a overlay2 (utile per sistemi pre-v0.2.4)
-#   - fix-nginx-systemd.sh: risolve problema blocco nginx su systemd (applicato automaticamente in v0.2.4)
+#   - fix-docker-storage-driver.sh: cambia Docker da ZFS a overlay2 (utile per sistemi pre-v0.2.5)
+#   - fix-nginx-systemd.sh: risolve problema blocco nginx su systemd (ESEGUITO AUTOMATICAMENTE in v0.2.5)
 # 
-# Dalla v0.2.4 in poi, tutte le nuove installazioni hanno già:
+# Dalla v0.2.5 in poi, tutte le nuove installazioni hanno già:
 #   - Docker configurato con overlay2 storage driver
 #   - Snapshot automatiche ZFS disabilitate
 #   - Nginx systemd service configurato correttamente
