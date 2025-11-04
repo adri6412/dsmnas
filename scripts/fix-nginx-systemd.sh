@@ -43,12 +43,9 @@ mkdir -p /etc/systemd/system/nginx.service.d
 cat > /etc/systemd/system/nginx.service.d/override.conf << 'EOF'
 [Service]
 # Fix per problema blocco systemd start
-# Usa Type=simple invece di forking per evitare problemi PID file
-Type=simple
-ExecStart=
-ExecStart=/usr/sbin/nginx -g 'daemon off;'
-# Rimuovi PIDFile (non necessario con Type=simple)
-PIDFile=
+# Usa Type=notify invece di forking - nginx supporta notifiche systemd
+Type=notify
+# Mantieni daemon on (migliore per production)
 # Aumenta timeout
 TimeoutStartSec=30
 TimeoutStopSec=30
