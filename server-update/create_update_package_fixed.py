@@ -325,6 +325,16 @@ fi
 VERSION=$(cat metadata.json | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | tr -d '\n\r')
 log "Versione da installare: $VERSION"
 
+# Leggi versione precedente installata
+PREVIOUS_VERSION=""
+if [[ -f "$INSTALL_DIR/VERSION" ]]; then
+    PREVIOUS_VERSION=$(cat "$INSTALL_DIR/VERSION" | tr -d '\n\r' | head -1)
+    log "Versione precedente: $PREVIOUS_VERSION"
+else
+    log "Versione precedente: sconosciuta (prima installazione o pre-VERSION)"
+    PREVIOUS_VERSION="0.0.0"
+fi
+
 # Crea backup automatico
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 AUTO_BACKUP_PATH="$BACKUP_DIR/backup_pre_update_${VERSION}_${TIMESTAMP}.tar.gz"
@@ -584,19 +594,45 @@ for service in *.service; do
     fi
 done
 
-# ⚠️ TODO v0.2.8+: RIMUOVERE QUESTO BLOCCO!
-# Questo fix è SOLO per v0.2.7 (sistemi con override nginx vecchio)
-# Dalla v0.2.8+ non serve più perché:
-#  - Chi ha v0.2.7+ ha già l'override cancellato
-#  - Nuove installazioni non hanno override
-# INIZIO BLOCCO DA RIMUOVERE IN v0.2.8+ -->
+# ========================================================================
+# FIX SPECIFICI PER VERSIONE
+# ========================================================================
+# REGOLE per aggiungere fix:
+# 1. SEMPRE idempotenti (controllare prima se necessario)
+# 2. Includere numero versione nel commento (es. "Fix v0.2.7")
+# 3. Non rimuovere mai fix vecchi - lasciarli qui (sono idempotenti)
+# 4. Fix futuri possono essere applicati a tutti perché controllano condizioni
+#
+# ESEMPIO di fix idempotente:
+#   if [[ condizione_che_richiede_fix ]]; then
+#       log "🔧 Fix vX.Y.Z: descrizione..."
+#       applica_fix
+#   else
+#       log "✓ Sistema già corretto (fix vX.Y.Z non necessario)"
+#   fi
+# ========================================================================
+
+# Fix v0.2.7: Rimozione override nginx
+# Idempotente: controlla se esiste prima di rimuovere
 if [[ -f "/etc/systemd/system/nginx.service.d/override.conf" ]]; then
-    log "  Rimozione override nginx (non più necessario)..."
+    log "  🔧 Fix v0.2.7: Rimozione override nginx (da v$PREVIOUS_VERSION)..."
     rm -f "/etc/systemd/system/nginx.service.d/override.conf"
     # Rimuovi directory se vuota
     rmdir "/etc/systemd/system/nginx.service.d" 2>/dev/null || true
+    log "  ✅ Override nginx rimosso"
+else
+    log "  ✓ Nginx già corretto (nessun override)"
 fi
-# <-- FINE BLOCCO DA RIMUOVERE IN v0.2.8+
+
+# ========================================================================
+# AGGIUNGI NUOVI FIX QUI SOTTO (sempre idempotenti!)
+# ========================================================================
+# Esempio fix futuro v0.2.8:
+# if [[ condizione ]]; then
+#     log "🔧 Fix v0.2.8: descrizione..."
+#     # applica fix
+# fi
+# ========================================================================
 
 # Ricarica systemd se sono stati aggiornati servizi
 if ls *.service 1> /dev/null 2>&1; then
@@ -730,6 +766,14 @@ echo "   - Assicurare che tutte le modifiche siano completamente attive"
 echo ""
 log "🔄 Per riavviare: Dashboard → Riavvia oppure 'reboot'"
 echo ""
+
+# Salva log delle migrazioni applicate
+log "📋 Salvataggio log migrazioni..."
+mkdir -p "$INSTALL_DIR/.migrations"
+cat >> "$INSTALL_DIR/.migrations/applied.log" << MIGEOF
+$(date -Iseconds) | $PREVIOUS_VERSION -> $VERSION | armnas_update_v${VERSION}.run
+MIGEOF
+log "✅ Log migrazione salvato"
 
 # Pulizia file .run dalla directory pending-updates
 log "🧹 Pulizia pending-updates..."
