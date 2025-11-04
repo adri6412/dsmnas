@@ -584,13 +584,19 @@ for service in *.service; do
     fi
 done
 
-# Rimuovi override nginx se esiste (pulizia tentativi precedenti)
+# ⚠️ TODO v0.2.8+: RIMUOVERE QUESTO BLOCCO!
+# Questo fix è SOLO per v0.2.7 (sistemi con override nginx vecchio)
+# Dalla v0.2.8+ non serve più perché:
+#  - Chi ha v0.2.7+ ha già l'override cancellato
+#  - Nuove installazioni non hanno override
+# INIZIO BLOCCO DA RIMUOVERE IN v0.2.8+ -->
 if [[ -f "/etc/systemd/system/nginx.service.d/override.conf" ]]; then
     log "  Rimozione override nginx (non più necessario)..."
     rm -f "/etc/systemd/system/nginx.service.d/override.conf"
     # Rimuovi directory se vuota
     rmdir "/etc/systemd/system/nginx.service.d" 2>/dev/null || true
 fi
+# <-- FINE BLOCCO DA RIMUOVERE IN v0.2.8+
 
 # Ricarica systemd se sono stati aggiornati servizi
 if ls *.service 1> /dev/null 2>&1; then
