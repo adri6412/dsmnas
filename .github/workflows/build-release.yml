@@ -1,10 +1,9 @@
 name: Build and Release Update Package
 
 on:
-  push:
-    tags:
-      - 'v*'  # Trigger on version tags like v0.3.0, v1.0.0, etc.
-  workflow_dispatch:  # Permette esecuzione manuale
+  # Rimosso trigger automatico su tag - solo esecuzione MANUALE
+  # Il rilascio dei pacchetti .run è controllato manualmente dall'utente
+  workflow_dispatch:  # SOLO esecuzione manuale
     inputs:
       version:
         description: 'Version number (es: 0.3.0)'
