@@ -190,6 +190,11 @@ class UpdatePackageBuilder:
                 print(f"    ⚙️  {conf_file.name}")
                 shutil.copy2(conf_file, package_dir)
             
+            # File servizi systemd da config/
+            for service_file in config_dir.glob("*.service"):
+                print(f"    🔧 {service_file.name}")
+                shutil.copy2(service_file, package_dir)
+            
             # Docker compose file da config/
             for compose_file in config_dir.glob("docker-compose*.yml"):
                 print(f"    🐳 {compose_file.name}")
@@ -564,6 +569,26 @@ for conf in *.conf; do
         cp "$conf" "$INSTALL_DIR/" || handle_error "Errore nell'aggiornamento delle configurazioni"
     fi
 done
+
+# Aggiorna servizi systemd (file .service)
+log "🔧 Aggiornamento servizi systemd..."
+for service in *.service; do
+    if [[ -f "$service" ]]; then
+        log "  Aggiornamento servizio: $service"
+        # Backup servizio esistente
+        if [[ -f "/etc/systemd/system/$service" ]]; then
+            cp "/etc/systemd/system/$service" "$TEMP_CONFIG_DIR/$service.old"
+        fi
+        # Copia nuovo servizio
+        cp "$service" "/etc/systemd/system/" || log "⚠️  Errore nell'aggiornamento di $service"
+    fi
+done
+
+# Ricarica systemd se sono stati aggiornati servizi
+if ls *.service 1> /dev/null 2>&1; then
+    log "  Ricarica systemd daemon..."
+    systemctl daemon-reload || log "⚠️  Errore ricarica systemd"
+fi
 
 # Aggiorna Docker Compose files
 log "🐳 Aggiornamento docker compose..."
