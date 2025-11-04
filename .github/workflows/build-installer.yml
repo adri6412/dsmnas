@@ -1,6 +1,8 @@
 name: Build Installer and ISO
 
 on:
+  # Rimosso push su tags - la ISO viene creata SOLO manualmente
+  # I pacchetti .run vengono creati automaticamente con tag tramite build-release.yml
   push:
     branches:
       - main
@@ -11,13 +13,11 @@ on:
       - 'frontend/**'
       - 'config/**'
       - 'live-build/**'
-    tags:
-      - 'v*'  # Trigger su tag versioni (es: v1.0.0)
   pull_request:
     branches:
       - main
       - master
-  workflow_dispatch:  # Permette esecuzione manuale
+  workflow_dispatch:  # Crea ISO manualmente - UNICO modo per generare ISO
     inputs:
       version:
         description: 'Version number (es: 1.0.0). Se vuoto, usa automatico.'
@@ -450,7 +450,9 @@ jobs:
         retention-days: 30
         
     - name: Create GitHub Release with ISO
-      if: startsWith(github.ref, 'refs/tags/v') && success()
+      # Rimosso - la ISO non crea release automatiche
+      # Solo i .run creano release (tramite build-release.yml)
+      if: false  # Disabilitato - gestione release separata
       uses: softprops/action-gh-release@v1
       with:
         files: |
