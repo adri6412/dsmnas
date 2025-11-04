@@ -450,41 +450,47 @@ jobs:
         retention-days: 30
         
     - name: Create GitHub Release with ISO
-      # Rimosso - la ISO non crea release automatiche
-      # Solo i .run creano release (tramite build-release.yml)
-      if: false  # Disabilitato - gestione release separata
+      # Crea release SOLO quando workflow è eseguito MANUALMENTE
+      if: github.event_name == 'workflow_dispatch' && success()
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: v${{ steps.version.outputs.version }}
         files: |
           scripts/installer_dsm_v${{ steps.version.outputs.version }}.sh
           live-build/binary-hybrid.iso
           live-build/binary.iso
           live-build/*.iso
-        name: Release v${{ steps.version.outputs.version }}
+        name: ArmNAS ISO v${{ steps.version.outputs.version }}
         body: |
-          ## VirtualDSM Installer v${{ steps.version.outputs.version }}
+          ## 💿 ArmNAS ISO - VirtualDSM Installer v${{ steps.version.outputs.version }}
           
-          ### Download
-          - **installer_dsm_v${{ steps.version.outputs.version }}.sh** - Installer completo
-          - **ISO Image** - Immagine ISO Debian Live con auto-installer
+          ### 📥 Download
+          - **ISO Image** - Immagine ISO Debian Live bootable
+          - **installer_dsm_v${{ steps.version.outputs.version }}.sh** - Installer standalone
           
-          ### Installazione
+          ### 🚀 Installazione
           
-          #### Opzione 1: Usa l'installer diretto
+          #### Metodo 1: ISO Bootable (Consigliato)
+          ```bash
+          # Scrivi ISO su USB
+          sudo dd if=VirtualDSM-*.iso of=/dev/sdX bs=4M status=progress
+          
+          # Boot da USB e l'installer parte automaticamente
+          ```
+          
+          #### Metodo 2: Installer diretto
           ```bash
           chmod +x installer_dsm_v${{ steps.version.outputs.version }}.sh
           sudo ./installer_dsm_v${{ steps.version.outputs.version }}.sh
           ```
           
-          #### Opzione 2: Usa l'ISO
-          1. Scrivi l'ISO su USB: `sudo dd if=*.iso of=/dev/sdX bs=4M status=progress`
-          2. Boot da USB
-          3. L'installer si avvierà automaticamente al primo boot
-          
-          ### Build Info
+          ### 📋 Build Info
           - **Versione:** ${{ steps.version.outputs.version }}
           - **Commit:** ${{ github.sha }}
-          - **Data:** ${{ github.event.head_commit.timestamp }}
+          - **Build:** Manuale
+          
+          ### ⚠️ Note
+          Questa è una release ISO - per aggiornare sistemi esistenti usa i pacchetti `.run`
         draft: false
         prerelease: false
       env:
