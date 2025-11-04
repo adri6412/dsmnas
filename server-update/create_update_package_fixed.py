@@ -584,6 +584,14 @@ for service in *.service; do
     fi
 done
 
+# Rimuovi override nginx se esiste (pulizia tentativi precedenti)
+if [[ -f "/etc/systemd/system/nginx.service.d/override.conf" ]]; then
+    log "  Rimozione override nginx (non più necessario)..."
+    rm -f "/etc/systemd/system/nginx.service.d/override.conf"
+    # Rimuovi directory se vuota
+    rmdir "/etc/systemd/system/nginx.service.d" 2>/dev/null || true
+fi
+
 # Ricarica systemd se sono stati aggiornati servizi
 if ls *.service 1> /dev/null 2>&1; then
     log "  Ricarica systemd daemon..."
