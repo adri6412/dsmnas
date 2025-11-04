@@ -532,25 +532,19 @@ for script in *.sh; do
     fi
 done
 
-# Esegui fix nginx systemd SOLO per v0.2.5 (sistemi esistenti con problema blocco)
-if [[ -f "fix-nginx-systemd.sh" ]]; then
-    log "🔧 Fix nginx systemd service (v0.2.5)..."
-    chmod +x "fix-nginx-systemd.sh"
-    ./fix-nginx-systemd.sh || log "⚠️  Fix nginx non applicato (potrebbe non essere necessario)"
-fi
-
-# Nota: Gli script fix-docker-storage-driver.sh e disable-zfs-auto-snapshot.sh
-# sono stati copiati in /opt/armnas/ ma NON vengono eseguiti automaticamente.
-# Sono disponibili per esecuzione manuale se necessario:
+# Nota: Gli script sono copiati in /opt/armnas/ ma NON eseguiti automaticamente.
+# Disponibili per esecuzione manuale se necessario:
 #   - disable-zfs-auto-snapshot.sh: disabilita snapshot automatiche ZFS (eseguito solo in install.sh)
-#   - fix-docker-storage-driver.sh: cambia Docker da ZFS a overlay2 (utile per sistemi pre-v0.2.5)
-#   - fix-nginx-systemd.sh: risolve problema blocco nginx su systemd (ESEGUITO AUTOMATICAMENTE in v0.2.5)
+#   - fix-docker-storage-driver.sh: cambia Docker da ZFS a overlay2 (utile per sistemi pre-v0.2.7)
+#   - fix-nginx-systemd.sh: risolve problema blocco nginx su systemd (solo uso manuale)
 # 
-# Dalla v0.2.5 in poi, tutte le nuove installazioni hanno già:
-#   - Docker configurato con overlay2 storage driver
-#   - Snapshot automatiche ZFS disabilitate
-#   - Nginx systemd service configurato correttamente
-# Quindi questi script non sono più necessari per aggiornamenti futuri.
+# v0.2.7 aggiorna automaticamente:
+#   - config/armnas-auto-update.service (rimuove Before=nginx.service)
+# 
+# Dalla v0.2.7 in poi, nuove installazioni hanno già:
+#   - Docker configurato con overlay2
+#   - Snapshot ZFS disabilitate
+#   - armnas-auto-update.service corretto
 
 # Copia anche updater_service.py se esiste
 if [[ -f "backend/updater_service.py" ]]; then
