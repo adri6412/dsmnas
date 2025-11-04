@@ -506,7 +506,7 @@ export default {
       try {
         await axios.post('/api/docker/container/start', { container_name: 'virtual-dsm' })
         $toast.success('Container virtual-dsm avviato con successo')
-        setTimeout(() => refreshContainerStatus(), 2000)
+        setTimeout(() => refreshContainerStatus(), 10000) // Aumentato a 10s per VM lente
       } catch (error) {
         console.error('Errore durante l\'avvio del container:', error)
         $toast.error(error.response?.data?.detail || 'Errore durante l\'avvio del container')
@@ -521,7 +521,7 @@ export default {
       try {
         await axios.post('/api/docker/container/stop', { container_name: 'virtual-dsm' })
         $toast.success('Container virtual-dsm fermato con successo')
-        setTimeout(() => refreshContainerStatus(), 2000)
+        setTimeout(() => refreshContainerStatus(), 10000) // Aumentato a 10s per VM lente
       } catch (error) {
         console.error('Errore durante la fermata del container:', error)
         $toast.error(error.response?.data?.detail || 'Errore durante la fermata del container')
@@ -536,7 +536,7 @@ export default {
       try {
         await axios.post('/api/docker/container/restart', { container_name: 'virtual-dsm' })
         $toast.success('Container virtual-dsm riavviato con successo')
-        setTimeout(() => refreshContainerStatus(), 2000)
+        setTimeout(() => refreshContainerStatus(), 10000) // Aumentato a 10s per VM lente
       } catch (error) {
         console.error('Errore durante il riavvio del container:', error)
         $toast.error(error.response?.data?.detail || 'Errore durante il riavvio del container')
