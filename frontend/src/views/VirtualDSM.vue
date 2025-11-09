@@ -364,9 +364,12 @@
           </div>
           <div class="card-body">
             <div class="alert alert-info">
-              <strong>💡 Cos'è macvlan + DHCP?</strong><br>
-              Permette a Virtual DSM di avere un <strong>IP separato</strong> nella tua rete LAN, come un dispositivo fisico.<br>
-              DSM ottiene l'IP dal tuo router tramite DHCP.
+              <strong>💡 Come funziona la rete con macvlan?</strong><br>
+              <strong>2 LIVELLI di rete:</strong><br>
+              1️⃣ <strong>Container Docker:</strong> Ha un IP nella tua rete LAN (es: 10.0.1.150)<br>
+              2️⃣ <strong>VM DSM (QEMU):</strong> VM che gira dentro il container, può avere IP separato o NAT<br>
+              <br>
+              <strong>Configurazione consigliata:</strong> IP statico al container, VM DSM usa NAT.
             </div>
             
             <form @submit.prevent="configureMacvlanNetwork">
@@ -388,45 +391,69 @@
               </div>
               
               <div v-if="macvlanConfig.enabled" class="border-start border-3 border-primary ps-3">
+                
+                <!-- Configurazione Rete Fisica -->
+                <h6 class="text-primary">🔧 Parametri Rete LAN</h6>
                 <div class="row mb-3">
-                  <div class="col-md-6">
+                  <div class="col-md-4">
                     <label for="subnet" class="form-label">Subnet</label>
                     <input 
                       type="text" 
                       class="form-control" 
                       id="subnet" 
                       v-model="macvlanConfig.subnet"
-                      placeholder="192.168.0.0/24"
+                      placeholder="10.0.1.0/24"
                     >
                     <div class="form-text">Subnet della tua rete LAN</div>
                   </div>
-                  <div class="col-md-6">
+                  <div class="col-md-4">
                     <label for="gateway" class="form-label">Gateway</label>
                     <input 
                       type="text" 
                       class="form-control" 
                       id="gateway" 
                       v-model="macvlanConfig.gateway"
-                      placeholder="192.168.0.1"
+                      placeholder="10.0.1.1"
                     >
                     <div class="form-text">IP del tuo router</div>
                   </div>
-                </div>
-                
-                <div class="row mb-3">
-                  <div class="col-md-6">
-                    <label for="parentInterface" class="form-label">Interfaccia di Rete</label>
+                  <div class="col-md-4">
+                    <label for="parentInterface" class="form-label">Interfaccia Fisica</label>
                     <input 
                       type="text" 
                       class="form-control" 
                       id="parentInterface" 
                       v-model="macvlanConfig.parent_interface"
-                      placeholder="eth0"
+                      placeholder="eno2"
                     >
-                    <div class="form-text">Interfaccia fisica (eth0, enp3s0, etc.)</div>
+                    <div class="form-text">Es: eth0, eno1, eno2</div>
                   </div>
                 </div>
                 
+                <hr class="my-4">
+                
+                <!-- IP Container Docker -->
+                <h6 class="text-success">🐳 IP Container Docker (Layer 1)</h6>
+                <div class="mb-3">
+                  <label for="containerIp" class="form-label">IP Container Docker</label>
+                  <input 
+                    type="text" 
+                    class="form-control" 
+                    id="containerIp" 
+                    v-model="macvlanConfig.container_ip"
+                    placeholder="10.0.1.150"
+                    required
+                  >
+                  <div class="form-text">
+                    <strong>IP statico per il container Docker</strong> nella tua rete LAN.<br>
+                    Consigliato: usa IP <strong>fuori dal range DHCP</strong> del router (es: 10.0.1.150-200)
+                  </div>
+                </div>
+                
+                <hr class="my-4">
+                
+                <!-- IP VM DSM -->
+                <h6 class="text-info">🖥️ IP VM DSM/QEMU (Layer 2 - Opzionale)</h6>
                 <div class="mb-3">
                   <div class="form-check">
                     <input 
@@ -434,25 +461,35 @@
                       type="checkbox" 
                       id="useDhcp"
                       v-model="macvlanConfig.use_dhcp"
-                      checked
                     >
                     <label class="form-check-label" for="useDhcp">
-                      Usa DHCP (consigliato)
+                      <strong>VM DSM usa DHCP separato dal router</strong> (avanzato)
                     </label>
                   </div>
                   <div class="form-text">
-                    DSM riceverà automaticamente un IP dal router
+                    Se abilitato, la <strong>VM QEMU dentro il container</strong> riceverà un <strong>secondo IP</strong> dal router via DHCP.<br>
+                    <strong>⚠️ Richiede:</strong> promiscuous mode su interfaccia, non sempre funziona.<br>
+                    <strong>💡 Consigliato:</strong> lasciare disabilitato (VM usa NAT tramite container).
                   </div>
+                </div>
+                
+                <div class="alert alert-success">
+                  <strong>✅ Riepilogo:</strong>
+                  <ul class="mb-0">
+                    <li><strong>Container Docker:</strong> Avrà IP {{ macvlanConfig.container_ip }} (statico)</li>
+                    <li><strong>VM DSM:</strong> {{ macvlanConfig.use_dhcp ? 'Riceverà IP dal router via DHCP' : 'Userà NAT tramite container (consigliato)' }}</li>
+                    <li><strong>Accesso DSM:</strong> http://{{ macvlanConfig.container_ip }}:5000 {{ macvlanConfig.use_dhcp ? '(o IP assegnato dal router se DHCP VM attivo)' : '' }}</li>
+                  </ul>
                 </div>
                 
                 <div class="alert alert-warning">
                   <font-awesome-icon icon="exclamation-triangle" class="me-2" />
-                  <strong>Importante:</strong>
+                  <strong>⚠️ Limitazioni macvlan:</strong>
                   <ul class="mb-0 mt-2">
-                    <li>Dopo l'applicazione, dovrai ricreare il container</li>
-                    <li>L'IP del server ({{ serverIP }}) non potrà più accedere a DSM (limitazione macvlan)</li>
-                    <li>Accedi a DSM dal suo nuovo IP assegnato dal router</li>
-                    <li>La porta 5000 non sarà più esposta (DSM userà porte standard)</li>
+                    <li>Dopo l'applicazione, click <strong>"Ricrea"</strong> per applicare</li>
+                    <li>L'host NAS ({{ serverIP }}) <strong>non potrà accedere</strong> a DSM direttamente (limitazione macvlan)</li>
+                    <li>Accedi a DSM da altri dispositivi nella rete</li>
+                    <li>Porta 5000 rimossa (tutte le porte esposte di default)</li>
                   </ul>
                 </div>
               </div>
@@ -599,12 +636,12 @@ export default {
     // Stato per la configurazione rete macvlan
     const macvlanConfig = ref({
       enabled: false,
-      subnet: '192.168.0.0/24',
-      gateway: '192.168.0.1',
-      ip_range: '192.168.0.100/28',
-      parent_interface: 'eth0',
-      container_ip: '192.168.0.100',
-      use_dhcp: true
+      subnet: '10.0.1.0/24',
+      gateway: '10.0.1.1',
+      ip_range: '10.0.1.100/28',
+      parent_interface: 'eno2',
+      container_ip: '10.0.1.150',  // IP statico default
+      use_dhcp: false  // Default IP statico (più affidabile)
     })
     const configuringNetwork = ref(false)
     const serverIP = ref(window.location.hostname)
