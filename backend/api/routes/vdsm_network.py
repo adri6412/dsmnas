@@ -57,10 +57,13 @@ async def configure_vdsm_network(config: MacvlanConfig, current_admin = Depends(
                     "docker", "network", "create", "-d", "macvlan",
                     f"--subnet={config.subnet}",
                     f"--gateway={config.gateway}",
-                    f"--ip-range={config.ip_range}",
                     f"-o parent={config.parent_interface}",
                     network_name
                 ]
+                
+                # Aggiungi ip-range SOLO se non usa DHCP
+                if not config.use_dhcp and config.ip_range:
+                    cmd.insert(-1, f"--ip-range={config.ip_range}")
                 
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 if result.returncode != 0:
