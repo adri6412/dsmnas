@@ -749,9 +749,16 @@ done
 # Aggiorna file VERSION
 log "📋 Aggiornamento file VERSION..."
 if [[ -f "VERSION" ]]; then
-    cp "VERSION" "$INSTALL_DIR/" || handle_error "Errore nell'aggiornamento del file VERSION"
-    NEW_VERSION=$(cat VERSION)
-    log "  ✅ Versione aggiornata a: $NEW_VERSION"
+    # Controlla se non stiamo copiando il file su se stesso
+    if [[ "$(realpath VERSION)" != "$(realpath $INSTALL_DIR/VERSION)" ]]; then
+        cp "VERSION" "$INSTALL_DIR/" || handle_error "Errore nell'aggiornamento del file VERSION"
+        NEW_VERSION=$(cat VERSION)
+        log "  ✅ Versione aggiornata a: $NEW_VERSION"
+    else
+        # File già nella posizione corretta
+        NEW_VERSION=$(cat VERSION)
+        log "  ✅ File VERSION già aggiornato: $NEW_VERSION"
+    fi
 else
     log "  ⚠️  File VERSION non trovato nel pacchetto"
 fi

@@ -145,9 +145,15 @@ async def configure_vdsm_network(config: MacvlanConfig, current_admin = Depends(
         }
         
     except yaml.YAMLError as e:
-        raise HTTPException(status_code=400, detail=f"Errore parsing YAML: {str(e)}")
+        import traceback
+        error_detail = f"Errore parsing YAML: {str(e)}\n{traceback.format_exc()}"
+        print(error_detail)  # Log nel backend
+        raise HTTPException(status_code=400, detail=error_detail)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore: {str(e)}")
+        import traceback
+        error_detail = f"Errore: {str(e)}\n{traceback.format_exc()}"
+        print(error_detail)  # Log nel backend
+        raise HTTPException(status_code=500, detail=error_detail)
 
 @router.get("/network-config")
 async def get_vdsm_network_config(current_admin = Depends(get_current_admin)):
