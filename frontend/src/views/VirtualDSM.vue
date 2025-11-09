@@ -348,6 +348,128 @@
         <div class="card">
           <div class="card-header">
             <h5 class="mb-0">
+              <font-awesome-icon icon="network-wired" class="me-2" />
+              Configurazione Rete - IP Separato
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-info">
+              <strong>💡 Cos'è macvlan + DHCP?</strong><br>
+              Permette a Virtual DSM di avere un <strong>IP separato</strong> nella tua rete LAN, come un dispositivo fisico.<br>
+              DSM ottiene l'IP dal tuo router tramite DHCP.
+            </div>
+            
+            <form @submit.prevent="configureMacvlanNetwork">
+              <div class="mb-3">
+                <div class="form-check form-switch">
+                  <input 
+                    class="form-check-input" 
+                    type="checkbox" 
+                    id="enableMacvlan"
+                    v-model="macvlanConfig.enabled"
+                  >
+                  <label class="form-check-label" for="enableMacvlan">
+                    <strong>Abilita IP separato con DHCP</strong>
+                  </label>
+                </div>
+                <div class="form-text">
+                  Quando abilitato, DSM avrà un IP dedicato nella tua rete (es: 192.168.0.150)
+                </div>
+              </div>
+              
+              <div v-if="macvlanConfig.enabled" class="border-start border-3 border-primary ps-3">
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <label for="subnet" class="form-label">Subnet</label>
+                    <input 
+                      type="text" 
+                      class="form-control" 
+                      id="subnet" 
+                      v-model="macvlanConfig.subnet"
+                      placeholder="192.168.0.0/24"
+                    >
+                    <div class="form-text">Subnet della tua rete LAN</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label for="gateway" class="form-label">Gateway</label>
+                    <input 
+                      type="text" 
+                      class="form-control" 
+                      id="gateway" 
+                      v-model="macvlanConfig.gateway"
+                      placeholder="192.168.0.1"
+                    >
+                    <div class="form-text">IP del tuo router</div>
+                  </div>
+                </div>
+                
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <label for="parentInterface" class="form-label">Interfaccia di Rete</label>
+                    <input 
+                      type="text" 
+                      class="form-control" 
+                      id="parentInterface" 
+                      v-model="macvlanConfig.parent_interface"
+                      placeholder="eth0"
+                    >
+                    <div class="form-text">Interfaccia fisica (eth0, enp3s0, etc.)</div>
+                  </div>
+                </div>
+                
+                <div class="mb-3">
+                  <div class="form-check">
+                    <input 
+                      class="form-check-input" 
+                      type="checkbox" 
+                      id="useDhcp"
+                      v-model="macvlanConfig.use_dhcp"
+                      checked
+                    >
+                    <label class="form-check-label" for="useDhcp">
+                      Usa DHCP (consigliato)
+                    </label>
+                  </div>
+                  <div class="form-text">
+                    DSM riceverà automaticamente un IP dal router
+                  </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                  <font-awesome-icon icon="exclamation-triangle" class="me-2" />
+                  <strong>Importante:</strong>
+                  <ul class="mb-0 mt-2">
+                    <li>Dopo l'applicazione, dovrai ricreare il container</li>
+                    <li>L'IP del server ({{ serverIP }}) non potrà più accedere a DSM (limitazione macvlan)</li>
+                    <li>Accedi a DSM dal suo nuovo IP assegnato dal router</li>
+                    <li>La porta 5000 non sarà più esposta (DSM userà porte standard)</li>
+                  </ul>
+                </div>
+              </div>
+              
+              <button 
+                type="submit" 
+                class="btn btn-primary"
+                :disabled="configuringNetwork"
+              >
+                <font-awesome-icon 
+                  icon="save" 
+                  :class="{ 'fa-spin': configuringNetwork }" 
+                  class="me-1" 
+                />
+                {{ configuringNetwork ? 'Applicazione...' : 'Applica Configurazione Rete' }}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row mb-4">
+      <div class="col-md-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">
               <font-awesome-icon icon="info-circle" class="me-2" />
               Informazioni
             </h5>
@@ -463,6 +585,19 @@ export default {
     const loadingDataRoot = ref(false)
     const configuringDataRoot = ref(false)
     
+    // Stato per la configurazione rete macvlan
+    const macvlanConfig = ref({
+      enabled: false,
+      subnet: '192.168.0.0/24',
+      gateway: '192.168.0.1',
+      ip_range: '192.168.0.100/28',
+      parent_interface: 'eth0',
+      container_ip: '192.168.0.100',
+      use_dhcp: true
+    })
+    const configuringNetwork = ref(false)
+    const serverIP = ref(window.location.hostname)
+    
     // Carica i dati all'avvio
     onMounted(() => {
       refreshDockerStatus()
@@ -470,6 +605,7 @@ export default {
       loadDiskSizeConfig()
       loadSerialConfig()
       loadDockerDataRoot()
+      loadMacvlanConfig()
     })
     
     // Funzione per aggiornare lo stato di Docker
@@ -719,6 +855,42 @@ export default {
       }
     }
     
+    // Carica configurazione rete macvlan
+    const loadMacvlanConfig = async () => {
+      try {
+        const response = await axios.get('/api/vdsm/network-config')
+        if (response.data.success) {
+          macvlanConfig.value.enabled = response.data.enabled || false
+          macvlanConfig.value.use_dhcp = response.data.use_dhcp || true
+        }
+      } catch (error) {
+        console.error('Errore caricamento config rete:', error)
+      }
+    }
+    
+    // Configura rete macvlan
+    const configureMacvlanNetwork = async () => {
+      configuringNetwork.value = true
+      try {
+        const response = await axios.post('/api/vdsm/configure-network', macvlanConfig.value)
+        $toast.success(response.data.message)
+        
+        // Suggerisci di ricreare container
+        if (macvlanConfig.value.enabled) {
+          setTimeout(() => {
+            $toast.warning('Ricorda di ricreare il container: docker compose down && docker compose up -d', {
+              duration: 10000
+            })
+          }, 2000)
+        }
+      } catch (error) {
+        console.error('Errore configurazione rete:', error)
+        $toast.error(error.response?.data?.detail || 'Errore nella configurazione della rete')
+      } finally {
+        configuringNetwork.value = false
+      }
+    }
+    
     return {
       dockerStatus,
       containerStatus,
@@ -750,7 +922,11 @@ export default {
       showLogsModal,
       getStatusClass,
       getContainerStatusClass,
-      copyToClipboard
+      copyToClipboard,
+      macvlanConfig,
+      configuringNetwork,
+      serverIP,
+      configureMacvlanNetwork
     }
   }
 }

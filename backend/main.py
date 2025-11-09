@@ -5,7 +5,7 @@ import uvicorn
 import os
 from sqlalchemy.orm import Session
 
-from api.routes import disk, auth, zfs, docker, system, updates
+from api.routes import disk, auth, zfs, docker, system, updates, vdsm_network
 from api.database import get_db
 from api.auth import get_current_admin, init_admin_user
 
@@ -48,6 +48,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Autenticazione"])
 app.include_router(disk.router, prefix="/api/disk", tags=["Disco"], dependencies=[Depends(get_current_admin)])
 app.include_router(zfs.router, prefix="/api/zfs", tags=["ZFS"], dependencies=[Depends(get_current_admin)])
 app.include_router(docker.router, prefix="/api/docker", tags=["Virtual DSM"], dependencies=[Depends(get_current_admin)])
+app.include_router(vdsm_network.router, prefix="/api/vdsm", tags=["Virtual DSM Network"], dependencies=[Depends(get_current_admin)])
 app.include_router(system.router, prefix="/api/system", tags=["Sistema"], dependencies=[Depends(get_current_admin)])
 app.include_router(updates.router, prefix="/api/updates", tags=["Aggiornamenti"], dependencies=[Depends(get_current_admin)])
 
