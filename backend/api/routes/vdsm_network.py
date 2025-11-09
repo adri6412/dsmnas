@@ -52,18 +52,17 @@ async def configure_vdsm_network(config: MacvlanConfig, current_admin = Depends(
             ).returncode == 0
             
             if not network_exists:
-                # Crea rete macvlan
+                # Crea rete macvlan con modalità bridge esplicita
+                # Soluzione da: https://github.com/docker/compose/issues/11716
                 cmd = [
                     "docker", "network", "create", "-d", "macvlan",
-                    f"--subnet={config.subnet}",
-                    f"--gateway={config.gateway}",
-                    f"-o parent={config.parent_interface}",
+                    "-o", "macvlan_mode=bridge",  # Modalità bridge esplicita
+                    "-o", f"parent={config.parent_interface}",
+                    "--subnet", config.subnet,
+                    "--gateway", config.gateway,
+                    f"--ip-range={config.container_ip}/32",  # IP singolo /32
                     network_name
                 ]
-                
-                # Aggiungi ip-range SOLO se non usa DHCP
-                if not config.use_dhcp and config.ip_range:
-                    cmd.insert(-1, f"--ip-range={config.ip_range}")
                 
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 if result.returncode != 0:
@@ -75,10 +74,10 @@ async def configure_vdsm_network(config: MacvlanConfig, current_admin = Depends(
                 del service['ports']
             
             # Container Docker SEMPRE con IP statico su macvlan
-            service['networks'] = {
-                network_name: {
-                    'ipv4_address': config.container_ip
-                }
+            # Importante: usa dizionario, non lista
+            service['networks'] = {}
+            service['networks'][network_name] = {
+                'ipv4_address': config.container_ip
             }
             
             # DHCP=Y è SOLO per la VM DSM, non per il container
