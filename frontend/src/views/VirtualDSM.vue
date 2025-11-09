@@ -136,6 +136,16 @@
                   <font-awesome-icon icon="redo" :class="{ 'fa-spin': restarting }" class="me-1" />
                   {{ restarting ? 'Riavvio in corso...' : 'Riavvia' }}
                 </button>
+                <button 
+                  v-if="containerStatus.exists" 
+                  class="btn btn-primary" 
+                  @click="recreateVirtualDSM"
+                  :disabled="recreating"
+                  title="Ricrea container per applicare nuove configurazioni (down + up)"
+                >
+                  <font-awesome-icon icon="sync-alt" :class="{ 'fa-spin': recreating }" class="me-1" />
+                  {{ recreating ? 'Ricreazione...' : 'Ricrea' }}
+                </button>
                 <button class="btn btn-secondary" @click="showLogsModal">
                   <font-awesome-icon icon="file-alt" class="me-1" />
                   Visualizza Log
@@ -559,6 +569,7 @@ export default {
     const starting = ref(false)
     const stopping = ref(false)
     const restarting = ref(false)
+    const recreating = ref(false)
     
     // Stato per i log
     const showLogs = ref(false)
@@ -678,6 +689,25 @@ export default {
         $toast.error(error.response?.data?.detail || 'Errore durante il riavvio del container')
       } finally {
         restarting.value = false
+      }
+    }
+    
+    // Funzione per ricreare virtual-dsm (down + up)
+    const recreateVirtualDSM = async () => {
+      if (!confirm('Ricreare il container? Questo applicherà le nuove configurazioni (rete, etc.)')) {
+        return
+      }
+      
+      recreating.value = true
+      try {
+        await axios.post('/api/docker/container/recreate', { container_name: 'virtual-dsm' })
+        $toast.success('Container ricreato! Attendi 10-20 secondi per l\'avvio...')
+        setTimeout(() => refreshContainerStatus(), 15000) // 15s per ricreazione
+      } catch (error) {
+        console.error('Errore durante la ricreazione del container:', error)
+        $toast.error(error.response?.data?.detail || 'Errore durante la ricreazione del container')
+      } finally {
+        recreating.value = false
       }
     }
     
@@ -897,6 +927,9 @@ export default {
       loadingDockerStatus,
       loadingContainerStatus,
       starting,
+      stopping,
+      restarting,
+      recreating,
       diskSizeForm,
       updatingDiskSize,
       loadDiskSizeConfig,
@@ -905,8 +938,6 @@ export default {
       updatingSerialConfig,
       loadSerialConfig,
       updateSerialConfig,
-      stopping,
-      restarting,
       showLogs,
       containerLogs,
       loadingLogs,
@@ -919,6 +950,7 @@ export default {
       startVirtualDSM,
       stopVirtualDSM,
       restartVirtualDSM,
+      recreateVirtualDSM,
       showLogsModal,
       getStatusClass,
       getContainerStatusClass,

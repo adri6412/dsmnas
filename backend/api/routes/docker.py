@@ -133,6 +133,48 @@ async def restart_docker_container(action: ContainerAction, current_admin = Depe
     
     return result
 
+@router.post("/container/recreate", response_model=Dict[str, Any])
+async def recreate_docker_container(action: ContainerAction, current_admin = Depends(get_current_admin)):
+    """
+    Ricrea un container Docker (down + up) per applicare nuove configurazioni
+    """
+    # Esegui docker compose down && up -d
+    try:
+        import subprocess
+        working_dir = "/opt/armnas"
+        
+        # Down
+        result_down = subprocess.run(
+            ["docker", "compose", "down"],
+            cwd=working_dir,
+            capture_output=True,
+            text=True
+        )
+        
+        if result_down.returncode != 0:
+            # Prova con docker-compose
+            result_down = subprocess.run(
+                ["docker-compose", "down"],
+                cwd=working_dir,
+                capture_output=True,
+                text=True
+            )
+        
+        # Up in background
+        subprocess.Popen(
+            ["docker", "compose", "up", "-d"],
+            cwd=working_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        
+        return {
+            "success": True,
+            "message": f"Container '{action.container_name}' ricreato con successo. Attendi qualche secondo..."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore ricreazione container: {str(e)}")
+
 # Endpoint per ottenere i log di un container
 @router.post("/container/logs", response_model=Dict[str, Any])
 async def get_docker_container_logs(request: ContainerLogs, current_admin = Depends(get_current_admin)):
