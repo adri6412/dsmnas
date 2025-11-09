@@ -120,9 +120,17 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git tag -a "v${{ steps.get_version.outputs.VERSION }}" -m "Release v${{ steps.get_version.outputs.VERSION }}"
-          git push origin "v${{ steps.get_version.outputs.VERSION }}"
-          # Ricontrolla il tag appena creato
+          
+          # Verifica se il tag esiste già
+          if git rev-parse "v${{ steps.get_version.outputs.VERSION }}" >/dev/null 2>&1; then
+            echo "⚠️  Tag v${{ steps.get_version.outputs.VERSION }} già esistente, uso quello"
+          else
+            echo "Creazione nuovo tag v${{ steps.get_version.outputs.VERSION }}"
+            git tag -a "v${{ steps.get_version.outputs.VERSION }}" -m "Release v${{ steps.get_version.outputs.VERSION }}"
+            git push origin "v${{ steps.get_version.outputs.VERSION }}"
+          fi
+          
+          # Ricontrolla il tag
           git fetch --tags
           git checkout "v${{ steps.get_version.outputs.VERSION }}"
       
