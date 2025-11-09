@@ -74,13 +74,20 @@ async def configure_vdsm_network(config: MacvlanConfig, current_admin = Depends(
             if 'ports' in service:
                 del service['ports']
             
-            # Aggiungi configurazione rete
+            # Container Docker SEMPRE con IP statico su macvlan
+            service['networks'] = {
+                network_name: {
+                    'ipv4_address': config.container_ip
+                }
+            }
+            
+            # DHCP=Y è SOLO per la VM DSM, non per il container
             if config.use_dhcp:
-                # Modalità DHCP: DSM ottiene IP dal router
+                # Modalità DHCP: VM DSM ottiene IP dal router (non il container!)
                 if 'environment' not in service:
                     service['environment'] = []
                 
-                # Aggiungi DHCP=Y se non presente
+                # Aggiungi DHCP=Y per la VM
                 env_list = service['environment']
                 if isinstance(env_list, list):
                     # Rimuovi vecchio DHCP se presente
@@ -88,7 +95,7 @@ async def configure_vdsm_network(config: MacvlanConfig, current_admin = Depends(
                     env_list.append('DHCP=Y')
                     service['environment'] = env_list
                 
-                # Aggiungi devices necessari per DHCP
+                # Aggiungi devices necessari per DHCP della VM
                 if 'devices' not in service:
                     service['devices'] = []
                 if '/dev/vhost-net' not in service['devices']:
@@ -96,16 +103,14 @@ async def configure_vdsm_network(config: MacvlanConfig, current_admin = Depends(
                 
                 # Aggiungi device_cgroup_rules
                 service['device_cgroup_rules'] = ['c *:* rwm']
-                
-                # Configurazione rete senza IP fisso
-                service['networks'] = [network_name]
             else:
-                # Modalità IP statico
-                service['networks'] = {
-                    network_name: {
-                        'ipv4_address': config.container_ip
-                    }
-                }
+                # Rimuovi DHCP se era abilitato prima
+                if 'environment' in service and isinstance(service['environment'], list):
+                    service['environment'] = [e for e in service['environment'] if not e.startswith('DHCP=')]
+                
+                # Rimuovi device_cgroup_rules se presente
+                if 'device_cgroup_rules' in service:
+                    del service['device_cgroup_rules']
             
             # Aggiungi definizione rete esterna
             if 'networks' not in compose_data:
@@ -138,7 +143,7 @@ async def configure_vdsm_network(config: MacvlanConfig, current_admin = Depends(
         
         # Salva configurazione aggiornata
         with open(compose_file, 'w') as f:
-            yaml.dump(compose_data, f, default_flow_style=False, sort_keys=False)
+            yaml.dump(compose_data, f, default_flow_style=False, sort_keys=False, allow_unicode=True, width=1000)
         
         return {
             "success": True,
