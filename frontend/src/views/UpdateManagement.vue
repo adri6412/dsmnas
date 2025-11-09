@@ -357,6 +357,7 @@ export default {
           headers: {
             'Content-Type': 'multipart/form-data'
           },
+          timeout: 300000, // 5 minuti per upload file .run grandi
           onUploadProgress: (progressEvent) => {
             uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
           }

@@ -44,27 +44,38 @@ class VirtualDSMConfig(BaseModel):
 @router.get("/status", response_model=Dict[str, Any])
 async def get_docker_status(current_admin = Depends(get_current_admin)):
     """
-    Verifica lo stato di Docker sul sistema
+    Verifica lo stato di Docker sul sistema (ottimizzato)
     """
+    # Ottimizzazione: controlli minimi necessari
     docker_installed = is_docker_installed()
-    compose_available = check_compose_available() if docker_installed else False
-    kvm_available = is_kvm_available() if docker_installed else False
+    
+    if not docker_installed:
+        # Se Docker non installato, ritorna subito
+        return {
+            "docker_installed": False,
+            "compose_available": False,
+            "kvm_available": False
+        }
+    
+    # Docker installato, controlli necessari
+    compose_available = check_compose_available()
+    kvm_available = is_kvm_available()
     
     result = {
-        "docker_installed": docker_installed,
+        "docker_installed": True,
         "compose_available": compose_available,
         "kvm_available": kvm_available
     }
     
-    if docker_installed:
-        version_result = get_docker_version()
-        if version_result["success"]:
-            result["docker_version"] = version_result["version"]
-        
-        if compose_available:
-            compose_version_result = get_docker_compose_version()
-            if compose_version_result["success"]:
-                result["compose_version"] = compose_version_result["version"]
+    # Versioni (opzionali, possono essere rimosse se non critiche)
+    version_result = get_docker_version()
+    if version_result["success"]:
+        result["docker_version"] = version_result["version"]
+    
+    if compose_available:
+        compose_version_result = get_docker_compose_version()
+        if compose_version_result["success"]:
+            result["compose_version"] = compose_version_result["version"]
     
     return result
 

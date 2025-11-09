@@ -628,6 +628,53 @@ fi
 # AGGIUNGI NUOVI FIX QUI SOTTO (sempre idempotenti!)
 # ========================================================================
 
+# Fix v0.3.0: Pulizia vecchi dataset Docker ZFS (causano snapshot e rallentamenti)
+# Idempotente: controlla se esistono dataset prima di rimuoverli
+if command -v zfs >/dev/null 2>&1 && command -v docker >/dev/null 2>&1; then
+    # Conta dataset Docker ZFS vecchi (hash 64 caratteri)
+    OLD_DATASETS=$(zfs list -H -o name -r Storage 2>/dev/null | grep -E "[a-f0-9]{64}" || true)
+    
+    if [[ -n "$OLD_DATASETS" ]]; then
+        DATASET_COUNT=$(echo "$OLD_DATASETS" | wc -l)
+        log "  🔧 Fix v0.3.0: Trovati $DATASET_COUNT vecchi dataset Docker ZFS"
+        log "  🧹 Pulizia dataset vecchi (causano snapshot e rallentamenti)..."
+        
+        # Verifica che Docker usi overlay2 prima di pulire
+        CURRENT_DRIVER=$(docker info 2>/dev/null | grep "Storage Driver" | awk '{print $3}' || echo "unknown")
+        
+        if [[ "$CURRENT_DRIVER" == "overlay2" ]]; then
+            log "  ✓ Docker usa overlay2, sicuro pulire dataset ZFS vecchi"
+            
+            # Ferma container prima di pulire
+            log "  ⏸️  Arresto container..."
+            cd "$INSTALL_DIR" && docker compose down 2>/dev/null || true
+            
+            # Distruggi tutti i dataset Docker ZFS vecchi
+            DESTROYED=0
+            while IFS= read -r dataset; do
+                if [[ -n "$dataset" ]]; then
+                    if zfs destroy -r "$dataset" 2>/dev/null; then
+                        DESTROYED=$((DESTROYED + 1))
+                    fi
+                fi
+            done <<< "$OLD_DATASETS"
+            
+            log "  ✅ Rimossi $DESTROYED dataset Docker ZFS vecchi"
+            log "  ✅ Snapshot automatiche Docker eliminate"
+            
+            # Riavvia container
+            log "  🔄 Riavvio container con overlay2..."
+            cd "$INSTALL_DIR" && docker compose up -d 2>/dev/null || log "  ⚠️  Riavvia manualmente: docker compose up -d"
+        else
+            log "  ⚠️  Docker usa ancora $CURRENT_DRIVER, non pulisco dataset (applica prima fix v0.2.9)"
+        fi
+    else
+        log "  ✓ Nessun dataset Docker ZFS vecchio trovato"
+    fi
+else
+    log "  ℹ️  ZFS o Docker non disponibili, skip fix pulizia dataset"
+fi
+
 # Fix v0.2.9: Cambia Docker storage driver da ZFS a overlay2
 # Idempotente: controlla driver attuale prima di modificare
 if command -v docker >/dev/null 2>&1; then

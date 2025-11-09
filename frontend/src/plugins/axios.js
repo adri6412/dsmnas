@@ -5,7 +5,7 @@ import router from '@/router'
 // Crea un'istanza di axios
 const axiosInstance = axios.create({
   baseURL: '/',
-  timeout: 10000,
+  timeout: 30000, // 30 secondi default (aumentato da 10s)
   withCredentials: true
 })
 

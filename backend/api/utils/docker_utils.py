@@ -30,31 +30,27 @@ def run_command(command: List[str], cwd: Optional[str] = None) -> Dict[str, Any]
 
 def is_docker_installed() -> bool:
     """
-    Verifica se Docker è installato sul sistema
+    Verifica se Docker è installato sul sistema (ottimizzato)
     """
-    result = run_command(["which", "docker"])
-    return result["success"]
+    # Ottimizzazione: controlla direttamente il file invece di subprocess
+    return os.path.exists("/usr/bin/docker") or os.path.exists("/usr/local/bin/docker")
 
 def get_qemu_vm_mac_address(container_name: str) -> Optional[str]:
     """
     Recupera il MAC address della VM QEMU che gira dentro il container Docker
+    OTTIMIZZATO: usa docker top invece di exec+ps (più veloce)
     """
     try:
-        # Esegui comando dentro il container per trovare il processo QEMU
-        result = run_command(["docker", "exec", container_name, "ps", "aux"])
+        # Ottimizzazione: usa docker top invece di docker exec (più veloce)
+        result = run_command(["docker", "top", container_name, "-eo", "cmd"])
         
         if not result["success"]:
             return None
         
         # Cerca il MAC address nei parametri di QEMU
-        # QEMU usa parametri come: -device virtio-net-pci,netdev=net0,mac=52:54:00:XX:XX:XX
-        # o -net nic,macaddr=52:54:00:XX:XX:XX
         output = result["output"]
         
         # Pattern per trovare MAC address nei parametri QEMU
-        import re
-        
-        # Cerca mac= o macaddr=
         mac_patterns = [
             r'mac=([0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2})',
             r'macaddr=([0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2})'
@@ -65,9 +61,8 @@ def get_qemu_vm_mac_address(container_name: str) -> Optional[str]:
             if match:
                 return match.group(1)
         
-        # Se non troviamo il MAC nei parametri, proviamo a cercarlo nei file di configurazione
-        # o nei log del container
-        log_result = run_command(["docker", "logs", "--tail", "200", container_name])
+        # Fallback: cerca nei log SOLO le prime 50 righe (più veloce)
+        log_result = run_command(["docker", "logs", "--tail", "50", container_name])
         if log_result["success"]:
             for pattern in mac_patterns:
                 match = re.search(pattern, log_result["output"])
@@ -128,27 +123,38 @@ def start_container(container_name: str, working_dir: str = "/opt/armnas") -> Di
     """
     Avvia un container Docker usando docker compose up -d.
     Docker Compose gestisce automaticamente la creazione e l'avvio del container.
+    ESEGUE IN BACKGROUND per non bloccare il backend durante start di VM pesanti.
     """
     # Usa docker compose per creare e avviare il container
     # Compose gestisce tutto: se non esiste lo crea, se esiste lo avvia
-    if check_compose_available():
-        # Prova prima con 'docker compose'
-        result = run_command(["docker", "compose", "up", "-d"], cwd=working_dir)
-        if not result["success"]:
-            # Prova con 'docker-compose'
-            result = run_command(["docker-compose", "up", "-d"], cwd=working_dir)
-    else:
-        result = run_command(["docker-compose", "up", "-d"], cwd=working_dir)
     
-    if result["success"]:
+    # Determina quale comando compose usare
+    compose_cmd = ["docker", "compose", "up", "-d"]
+    if not check_compose_available():
+        compose_cmd = ["docker-compose", "up", "-d"]
+    
+    try:
+        # Esegui in BACKGROUND usando Popen invece di run
+        # Questo permette al backend di rispondere immediatamente
+        process = subprocess.Popen(
+            compose_cmd,
+            cwd=working_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # Non aspettiamo il completamento - ritorna subito
+        # Il container si avvierà in background
         return {
             "success": True,
-            "message": f"Container '{container_name}' avviato con successo"
+            "message": f"Container '{container_name}' avvio in corso (background)...",
+            "pid": process.pid
         }
-    else:
+    except Exception as e:
         return {
             "success": False,
-            "error": result.get("error", "Errore sconosciuto nell'avvio del container")
+            "error": f"Errore nell'avvio del container: {str(e)}"
         }
 
 def stop_container(container_name: str) -> Dict[str, Any]:
@@ -204,16 +210,15 @@ def get_container_logs(container_name: str, tail: int = 100) -> Dict[str, Any]:
 
 def check_compose_available() -> bool:
     """
-    Verifica se docker compose è disponibile
+    Verifica se docker compose è disponibile (ottimizzato)
     """
-    # Prova prima con 'docker compose'
-    result = run_command(["docker", "compose", "version"])
-    if result["success"]:
-        return True
+    # Ottimizzazione: controlla binari invece di eseguire comandi
+    # docker compose (plugin) è sempre disponibile con docker moderno
+    if os.path.exists("/usr/bin/docker"):
+        return True  # Docker moderno ha sempre compose plugin
     
-    # Prova poi con 'docker-compose'
-    result = run_command(["docker-compose", "--version"])
-    return result["success"]
+    # Fallback: controlla docker-compose standalone
+    return os.path.exists("/usr/bin/docker-compose") or os.path.exists("/usr/local/bin/docker-compose")
 
 def compose_up(working_dir: str = "/opt/armnas") -> Dict[str, Any]:
     """
@@ -302,10 +307,10 @@ def compose_ps() -> Dict[str, Any]:
 
 def is_kvm_available() -> bool:
     """
-    Verifica se KVM è disponibile sul sistema
+    Verifica se KVM è disponibile sul sistema (ottimizzato)
     """
-    result = run_command(["ls", "/dev/kvm"])
-    return result["success"]
+    # Ottimizzazione: controlla direttamente il file invece di subprocess
+    return os.path.exists("/dev/kvm")
 
 def get_docker_version() -> Dict[str, Any]:
     """
