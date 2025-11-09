@@ -627,11 +627,52 @@ fi
 # ========================================================================
 # AGGIUNGI NUOVI FIX QUI SOTTO (sempre idempotenti!)
 # ========================================================================
-# Esempio fix futuro v0.2.8:
-# if [[ condizione ]]; then
-#     log "🔧 Fix v0.2.8: descrizione..."
-#     # applica fix
-# fi
+
+# Fix v0.2.9: Cambia Docker storage driver da ZFS a overlay2
+# Idempotente: controlla driver attuale prima di modificare
+if command -v docker >/dev/null 2>&1; then
+    DOCKER_DRIVER=$(docker info 2>/dev/null | grep "Storage Driver" | awk '{print $3}' || echo "unknown")
+    if [[ "$DOCKER_DRIVER" == "zfs" ]]; then
+        log "  🔧 Fix v0.2.9: Docker usa storage driver ZFS (crea snapshot automatiche)"
+        log "  🔄 Cambio storage driver a overlay2..."
+        
+        # Ferma Docker
+        systemctl stop docker 2>/dev/null || true
+        
+        # Backup configurazione Docker
+        if [[ -f "/etc/docker/daemon.json" ]]; then
+            cp "/etc/docker/daemon.json" "/etc/docker/daemon.json.backup-$(date +%Y%m%d_%H%M%S)"
+        fi
+        
+        # Configura overlay2
+        mkdir -p /etc/docker
+        cat > /etc/docker/daemon.json << 'DOCKERJSONEOF'
+{
+  "storage-driver": "overlay2",
+  "data-root": "/storage/docker"
+}
+DOCKERJSONEOF
+        
+        # Riavvia Docker
+        systemctl start docker 2>/dev/null || true
+        sleep 2
+        
+        # Verifica nuovo driver
+        NEW_DRIVER=$(docker info 2>/dev/null | grep "Storage Driver" | awk '{print $3}' || echo "unknown")
+        if [[ "$NEW_DRIVER" == "overlay2" ]]; then
+            log "  ✅ Docker storage driver cambiato con successo a overlay2"
+            log "  ⚠️  IMPORTANTE: I container devono essere ricreati!"
+            log "     cd /opt/armnas && docker compose down && docker compose up -d"
+        else
+            log "  ⚠️  Cambio storage driver non riuscito (driver: $NEW_DRIVER)"
+        fi
+    else
+        log "  ✓ Docker storage driver già corretto: $DOCKER_DRIVER"
+    fi
+else
+    log "  ℹ️  Docker non installato, skip fix storage driver"
+fi
+
 # ========================================================================
 
 # Ricarica systemd se sono stati aggiornati servizi
